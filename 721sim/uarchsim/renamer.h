@@ -177,6 +177,38 @@ private:
 		uint8_t  vpq_tail_phase;
 	};
 	vector<Branch_Checkpoint> Branch_Checkpoints;
+
+	struct SVP_Entry {
+		bool valid;
+		uint64_t tag;
+		uint64_t conf;
+		uint64_t retired_value;
+		int64_t stride;
+		uint64_t instance;
+	};
+
+	vector<SVP_Entry> SVP;
+	uint64_t SVP_num_entries;
+
+	struct VPQ_Entry {
+		bool valid;
+		uint64_t pc;
+		uint64_t value;
+		bool value_valid;
+	};
+
+	vector<VPQ_Entry> VPQ;
+	uint64_t VPQ_size;
+	uint64_t VPQ_head;
+	uint64_t VPQ_tail;
+	uint8_t  VPQ_head_phase;
+	uint8_t  VPQ_tail_phase;
+
+	uint64_t svp_index(uint64_t pc) const;
+	uint64_t svp_tag(uint64_t pc) const;
+	bool svp_hit(uint64_t pc, uint64_t &idx) const;
+	uint64_t vpq_count_pc(uint64_t pc) const;
+	void vpq_restore_tail(uint64_t tail, uint8_t tail_phase);
 	/////////////////////////////////////////////////////////////////////
 	// Private functions.
 	// e.g., a generic function to copy state from one map to another.
@@ -352,6 +384,19 @@ public:
 
 	void set_checkpoint_vpq_tail(uint64_t branch_ID, uint64_t vpq_tail, uint8_t vpq_tail_phase);
 	void get_checkpoint_vpq_tail(uint64_t branch_ID, uint64_t &vpq_tail, uint8_t &vpq_tail_phase) const;
+
+	bool stall_vp(uint64_t bundle_vp);
+
+	void vpq_checkpoint(uint64_t branch_ID);
+
+	void vp_predict(uint64_t pc,
+	                bool &pred_avail,
+	                bool &confident,
+	                uint64_t &prediction);
+
+	uint64_t vpq_alloc(uint64_t pc);
+	void vpq_deposit(uint64_t vpq_idx, uint64_t value);
+	void vp_retire(uint64_t vpq_idx);
 
 	//////////////////////////////////////////
 	// Functions related to Dispatch Stage. //

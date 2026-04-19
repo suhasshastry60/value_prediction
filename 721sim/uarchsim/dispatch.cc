@@ -202,10 +202,6 @@ void pipeline_t::dispatch() {
             REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].vp_prediction);
             REN->set_ready(PAY.buf[index].C_phys_reg);
             PAY.buf[index].vp_used = true;
-            printf("VP USE: pc=0x%lx pred=%lu phys=%u\n",
-                   PAY.buf[index].pc,
-                   PAY.buf[index].vp_prediction,
-                   PAY.buf[index].C_phys_reg);
          }
          else {
             REN->clear_ready(PAY.buf[index].C_phys_reg);

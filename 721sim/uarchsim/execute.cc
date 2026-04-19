@@ -75,8 +75,12 @@ void pipeline_t::execute(unsigned int lane_number) {
             // FIX_ME #13 BEGIN
             if (hit && PAY.buf[index].C_valid) 
             {
+               if (PAY.buf[index].vpq_valid)
+                  REN->vpq_deposit(PAY.buf[index].vpq_idx, PAY.buf[index].C_value.dw);
+
                if (!PAY.buf[index].vp_used)
                   IQ.wakeup(PAY.buf[index].C_phys_reg, true);
+
                REN->set_ready(PAY.buf[index].C_phys_reg);
                REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
             }
@@ -137,7 +141,10 @@ void pipeline_t::execute(unsigned int lane_number) {
          // FIX_ME #14 BEGIN
          if (PAY.buf[index].C_valid) 
          {
-          REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
+            if (PAY.buf[index].vpq_valid)
+               REN->vpq_deposit(PAY.buf[index].vpq_idx, PAY.buf[index].C_value.dw);
+
+            REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
          }
          // FIX_ME #14 END
       }
@@ -253,8 +260,12 @@ void pipeline_t::load_replay() {
          // 2. See #13 (in execute.cc), and implement steps 3a,3b,3c.
 
          // FIX_ME #18a BEGIN
+         if (PAY.buf[index].vpq_valid)
+            REN->vpq_deposit(PAY.buf[index].vpq_idx, PAY.buf[index].C_value.dw);
+
          if (!PAY.buf[index].vp_used)
             IQ.wakeup(PAY.buf[index].C_phys_reg, true);
+
          REN->set_ready(PAY.buf[index].C_phys_reg);
          REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
          // FIX_ME #18a END

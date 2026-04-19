@@ -90,6 +90,10 @@ void pipeline_t::retire(size_t &instret) {
          //
 
          // FIX_ME #17b BEGIN
+         if (PAY.buf[PAY.head].vpq_valid) {
+            REN->vp_retire(PAY.buf[PAY.head].vpq_idx);
+         }
+
          REN->commit();
          // FIX_ME #17b END
 

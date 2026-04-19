@@ -1,4 +1,5 @@
 #include "renamer.h"
+#include "parameters.h"
 
 renamer::renamer(uint64_t logic_reg_count,
                  uint64_t phys_reg_count,
@@ -86,6 +87,38 @@ renamer::renamer(uint64_t logic_reg_count,
 	Active_List_tail = 0;
 	 Active_List_head_phase = 0;
 	Active_List_tail_phase = 0;
+
+	if (VP_SVP) {
+		SVP_num_entries = (1ULL << SVP_INDEX_BITS);
+		if (SVP_num_entries == 0) SVP_num_entries = 1;
+	}
+	else {
+		SVP_num_entries = 1;
+	}
+
+	SVP.resize(SVP_num_entries);
+	for (uint64_t i = 0; i < SVP_num_entries; i++) {
+		SVP[i].valid = false;
+		SVP[i].tag = 0;
+		SVP[i].conf = 0;
+		SVP[i].retired_value = 0;
+		SVP[i].stride = 0;
+		SVP[i].instance = 0;
+	}
+
+	VPQ_size = (VPQ_SIZE ? VPQ_SIZE : 1);
+	VPQ.resize(VPQ_size);
+	for (uint64_t i = 0; i < VPQ_size; i++) {
+		VPQ[i].valid = false;
+		VPQ[i].pc = 0;
+		VPQ[i].value = 0;
+		VPQ[i].value_valid = false;
+	}
+
+	VPQ_head = 0;
+	VPQ_tail = 0;
+	VPQ_head_phase = 0;
+	VPQ_tail_phase = 0;
 }
 
 renamer::~renamer() {
@@ -165,6 +198,189 @@ void renamer::get_checkpoint_vpq_tail(uint64_t branch_ID, uint64_t &vpq_tail, ui
 	assert(branch_ID < num_branches);
 	vpq_tail = Branch_Checkpoints[branch_ID].vpq_tail;
 	vpq_tail_phase = Branch_Checkpoints[branch_ID].vpq_tail_phase;
+}
+
+bool renamer::stall_vp(uint64_t bundle_vp) {
+	if (!VP_SVP) return false;
+	uint64_t occ = ring_occupancy(VPQ_head, VPQ_tail, VPQ_head_phase, VPQ_tail_phase, VPQ_size);
+	uint64_t free = VPQ_size - occ;
+	return (free < bundle_vp);
+}
+
+uint64_t renamer::svp_index(uint64_t pc) const {
+	return ((pc >> 2) & (SVP_num_entries - 1));
+}
+
+uint64_t renamer::svp_tag(uint64_t pc) const {
+	if (SVP_TAG_BITS == 0) return 0;
+
+	uint64_t raw = (pc >> (2 + SVP_INDEX_BITS));
+	uint64_t full_bits = 62 - SVP_INDEX_BITS;
+
+	if (SVP_TAG_BITS >= full_bits) {
+		return raw;
+	}
+
+	uint64_t mask = (1ULL << SVP_TAG_BITS) - 1ULL;
+	return (raw & mask);
+}
+
+bool renamer::svp_hit(uint64_t pc, uint64_t &idx) const {
+	idx = svp_index(pc);
+	if (!SVP[idx].valid) return false;
+	if (SVP_TAG_BITS == 0) return true;
+	return (SVP[idx].tag == svp_tag(pc));
+}
+
+void renamer::vpq_checkpoint(uint64_t branch_ID) {
+	assert(branch_ID < num_branches);
+	Branch_Checkpoints[branch_ID].vpq_tail = VPQ_tail;
+	Branch_Checkpoints[branch_ID].vpq_tail_phase = VPQ_tail_phase;
+}
+
+void renamer::vp_predict(uint64_t pc,
+                         bool &pred_avail,
+                         bool &confident,
+                         uint64_t &prediction) {
+	pred_avail = false;
+	confident = false;
+	prediction = 0;
+
+	if (!VP_SVP) return;
+
+	uint64_t idx;
+	if (!svp_hit(pc, idx)) return;
+
+	SVP[idx].instance++;
+
+	int64_t pred =
+		(int64_t)SVP[idx].retired_value +
+		((int64_t)SVP[idx].instance * SVP[idx].stride);
+
+	prediction = (uint64_t) pred;
+	pred_avail = true;
+	confident = (SVP[idx].conf == SVP_CONFMAX);
+}
+
+uint64_t renamer::vpq_alloc(uint64_t pc) {
+	assert(VP_SVP);
+	assert(!stall_vp(1));
+
+	uint64_t idx = VPQ_tail;
+
+	VPQ[idx].valid = true;
+	VPQ[idx].pc = pc;
+	VPQ[idx].value = 0;
+	VPQ[idx].value_valid = false;
+
+	advance_ptr(VPQ_tail, VPQ_tail_phase, VPQ_size);
+	return idx;
+}
+
+void renamer::vpq_deposit(uint64_t vpq_idx, uint64_t value) {
+	assert(vpq_idx < VPQ_size);
+	assert(VPQ[vpq_idx].valid);
+
+	VPQ[vpq_idx].value = value;
+	VPQ[vpq_idx].value_valid = true;
+}
+
+uint64_t renamer::vpq_count_pc(uint64_t pc) const {
+	uint64_t count = 0;
+	uint64_t idx = VPQ_head;
+	uint8_t  phase = VPQ_head_phase;
+	uint64_t target_index = svp_index(pc);
+	uint64_t target_tag = svp_tag(pc);
+
+	while (!((idx == VPQ_tail) && (phase == VPQ_tail_phase))) {
+		if (VPQ[idx].valid) {
+			if (svp_index(VPQ[idx].pc) == target_index) {
+				if (SVP_TAG_BITS == 0 || svp_tag(VPQ[idx].pc) == target_tag) {
+					count++;
+				}
+			}
+		}
+
+		idx++;
+		if (idx >= VPQ_size) {
+			idx = 0;
+			phase ^= 1;
+		}
+	}
+
+	return count;
+}
+
+void renamer::vp_retire(uint64_t vpq_idx) {
+	assert(VP_SVP);
+	assert(!ring_empty(VPQ_head, VPQ_tail, VPQ_head_phase, VPQ_tail_phase));
+	assert(VPQ_head == vpq_idx);
+	assert(VPQ[VPQ_head].valid);
+	assert(VPQ[VPQ_head].value_valid);
+
+	uint64_t pc = VPQ[VPQ_head].pc;
+	uint64_t value = VPQ[VPQ_head].value;
+
+	VPQ[VPQ_head].valid = false;
+	VPQ[VPQ_head].value_valid = false;
+
+	advance_ptr(VPQ_head, VPQ_head_phase, VPQ_size);
+
+	uint64_t idx = svp_index(pc);
+	bool hit = svp_hit(pc, idx);
+
+	if (hit) {
+		int64_t new_stride = (int64_t) value - (int64_t) SVP[idx].retired_value;
+
+		if (new_stride == SVP[idx].stride) {
+			if (SVP[idx].conf < SVP_CONFMAX)
+				SVP[idx].conf++;
+		}
+		else {
+			SVP[idx].stride = new_stride;
+			SVP[idx].conf = 0;
+		}
+
+		SVP[idx].retired_value = value;
+		assert(SVP[idx].instance > 0);
+		SVP[idx].instance--;
+	}
+	else {
+		SVP[idx].valid = true;
+		SVP[idx].tag = svp_tag(pc);
+		SVP[idx].conf = 0;
+		SVP[idx].retired_value = value;
+		SVP[idx].stride = (int64_t) value;
+		SVP[idx].instance = vpq_count_pc(pc);
+	}
+}
+
+void renamer::vpq_restore_tail(uint64_t tail, uint8_t tail_phase) {
+	if (!VP_SVP) return;
+
+	uint64_t idx = tail;
+	uint8_t phase = tail_phase;
+
+	while (!((idx == VPQ_tail) && (phase == VPQ_tail_phase))) {
+		if (VPQ[idx].valid) {
+			uint64_t svp_idx = 0;
+			if (svp_hit(VPQ[idx].pc, svp_idx) && SVP[svp_idx].instance > 0) {
+				SVP[svp_idx].instance--;
+			}
+
+			VPQ[idx].valid = false;
+			VPQ[idx].value_valid = false;
+		}
+
+		idx++;
+		if (idx >= VPQ_size) {
+			idx = 0;
+			phase ^= 1;
+		}
+	}
+
+	VPQ_tail = tail;
+	VPQ_tail_phase = tail_phase;
 }
 
 bool renamer::stall_dispatch( uint64_t bundle_inst) {
@@ -286,6 +502,11 @@ void renamer::resolve(uint64_t AL_index, uint64_t branch_ID, bool correct) {
 	Active_List_tail = new_tail_idx;
 	Active_List_tail_phase = new_tail_phase;
 
+	if (VP_SVP) {
+		vpq_restore_tail(Branch_Checkpoints[branch_ID].vpq_tail,
+		                 Branch_Checkpoints[branch_ID].vpq_tail_phase);
+	}
+
 	assert((Global_Branch_Mask & bit) == 0ULL);
 	 assert(!active_list_empty());
 	assert(!(Active_List_tail == Active_List_head && Active_List_tail_phase == Active_List_head_phase));
@@ -379,6 +600,22 @@ void renamer::squash() {
 
 	for (uint64_t p = 0; p < num_phys_regs; p++) Ready_Bits[p] = 0;
 	for (uint64_t l = 0; l < num_logic_regs; l++) Ready_Bits[Architectural_Map_Table[l]] = 1;
+
+	if (VP_SVP) {
+		VPQ_head = 0;
+		VPQ_tail = 0;
+		VPQ_head_phase = 0;
+		VPQ_tail_phase = 0;
+
+		for (uint64_t i = 0; i < VPQ_size; i++) {
+			VPQ[i].valid = false;
+			VPQ[i].value_valid = false;
+		}
+
+		for (uint64_t i = 0; i < SVP_num_entries; i++) {
+			SVP[i].instance = 0;
+		}
+	}
 }
 
 void renamer::set_exception(uint64_t AL_index) {

@@ -70,7 +70,7 @@ void pipeline_t::rename1() {
 void pipeline_t::rename2() {
    unsigned int i;
    unsigned int index;
-   unsigned int bundle_dst, bundle_branch;
+   unsigned int bundle_dst, bundle_branch, bundle_vp;
 
    // Stall the rename2 sub-stage if either:
    // (1) There isn't a current rename bundle.
@@ -85,6 +85,7 @@ void pipeline_t::rename2() {
    // Third stall condition: There aren't enough rename resources for the current rename bundle.
    bundle_dst = 0;
    bundle_branch = 0;
+   bundle_vp = 0;
    for (i = 0; i < dispatch_width; i++) {
       if (!RENAME2[i].valid)
          break; // Not a valid instruction: Reached the end of the rename bundle so exit loop.
@@ -111,6 +112,9 @@ void pipeline_t::rename2() {
 
       if (PAY.buf[index].C_valid)
             bundle_dst++;
+
+      if (VP_SVP && vp_eligible_inst(PAY.buf[index]))
+            bundle_vp++;
       // FIX_ME #1 END
    }
 
@@ -125,7 +129,9 @@ void pipeline_t::rename2() {
    // This is achieved by doing nothing and proceeding to the next statements.
 
    // FIX_ME #2 BEGIN
-   if (REN->stall_branch(bundle_branch)||REN->stall_reg(bundle_dst))
+   if (REN->stall_branch(bundle_branch) ||
+       REN->stall_reg(bundle_dst) ||
+       REN->stall_vp(bundle_vp))
          return;
    // FIX_ME #2 END
 
@@ -137,27 +143,6 @@ void pipeline_t::rename2() {
          break; // Not a valid instruction: Reached the end of the rename bundle so exit loop.
 
       index = RENAME2[i].index;
-
-      PAY.buf[index].vp_eligible   = vp_eligible_inst(PAY.buf[index]);
-      PAY.buf[index].vp_pred_avail = false;
-      PAY.buf[index].vp_confident  = false;
-      PAY.buf[index].vp_used       = false;
-      PAY.buf[index].vp_correct    = false;
-      PAY.buf[index].vp_prediction = 0;
-      PAY.buf[index].vpq_valid     = false;
-      PAY.buf[index].vpq_idx       = 0;
-
-      if (VP_PERFECT && PAY.buf[index].vp_eligible && PAY.buf[index].good_instruction) {
-         db_t *actual = get_pipe()->peek(PAY.buf[index].db_index);
-
-         PAY.buf[index].vp_pred_avail = true;
-         PAY.buf[index].vp_confident  = true;
-         PAY.buf[index].vp_prediction = actual->a_rdst[0].value;
-
-         printf("VP PERF: pc=0x%lx pred=%lu\n",
-                PAY.buf[index].pc,
-                PAY.buf[index].vp_prediction);
-      }
 
       // FIX_ME #3
       // Rename source registers (first) and destination register (second).
@@ -211,9 +196,40 @@ void pipeline_t::rename2() {
       //    so that the branch ID can be used in subsequent pipeline stages.
 
       // FIX_ME #5 BEGIN
-      if (PAY.buf[index].checkpoint)
-          PAY.buf[index].branch_ID =REN->checkpoint();
+      if (PAY.buf[index].checkpoint) {
+          PAY.buf[index].branch_ID = REN->checkpoint();
+          if (VP_SVP)
+             REN->vpq_checkpoint(PAY.buf[index].branch_ID);
+      }
       // FIX_ME #5 END
+
+      PAY.buf[index].vp_eligible   = vp_eligible_inst(PAY.buf[index]);
+      PAY.buf[index].vp_pred_avail = false;
+      PAY.buf[index].vp_confident  = false;
+      PAY.buf[index].vp_used       = false;
+      PAY.buf[index].vp_correct    = false;
+      PAY.buf[index].vp_prediction = 0;
+      PAY.buf[index].vpq_valid     = false;
+      PAY.buf[index].vpq_idx       = 0;
+
+      if (PAY.buf[index].vp_eligible) {
+         if (VP_PERFECT && PAY.buf[index].good_instruction) {
+            db_t *actual = get_pipe()->peek(PAY.buf[index].db_index);
+
+            PAY.buf[index].vp_pred_avail = true;
+            PAY.buf[index].vp_confident  = true;
+            PAY.buf[index].vp_prediction = actual->a_rdst[0].value;
+         }
+         else if (VP_SVP) {
+            REN->vp_predict(PAY.buf[index].pc,
+                            PAY.buf[index].vp_pred_avail,
+                            PAY.buf[index].vp_confident,
+                            PAY.buf[index].vp_prediction);
+
+            PAY.buf[index].vpq_idx = REN->vpq_alloc(PAY.buf[index].pc);
+            PAY.buf[index].vpq_valid = true;
+         }
+      }
    }
 
    //
