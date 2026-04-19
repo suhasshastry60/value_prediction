@@ -149,7 +149,7 @@ void pipeline_t::execute(unsigned int lane_number) {
          // You don't have to decode the instruction, rather, just check the existence (validity) of a destination register.
 
          // FIX_ME #14 BEGIN
-         if (PAY.buf[index].C_valid) 
+         if (PAY.buf[index].C_valid && !PAY.buf[index].trap.valid())
          {
             if (PAY.buf[index].vpq_valid)
                REN->vpq_deposit(PAY.buf[index].vpq_idx, PAY.buf[index].C_value.dw);

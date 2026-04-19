@@ -279,6 +279,11 @@ static void set_vp_svp(const char *config) {
       exit(-1);
    }
 
+   if (oracleconf > 1) {
+      fprintf(stderr, "Error: oracleconf must be 0 or 1.\n");
+      exit(-1);
+   }
+
    VP_ENABLE = true;
    VP_SVP = true;
    VP_ORACLE_CONF = (oracleconf ? true : false);

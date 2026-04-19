@@ -5,3 +5,6 @@ run/validation_runs/microbenchmark_runs/stats.*
 run/400.perlbench_splitmail_ref.2724.0.44.gz/
 run/473.astar_biglakes_ref.1844.0.50.gz
 run/validation_runs/*.log
+run/validation_runs/microbenchmark_runs/VAL-*
+proj4_spec_gpt.pdf
+run/validation_runs/results/

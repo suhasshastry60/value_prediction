@@ -226,6 +226,8 @@ void pipeline_t::rename2() {
                             PAY.buf[index].vp_confident,
                             PAY.buf[index].vp_prediction);
 
+            // Project 4: checker truth is used only for perfect VP and oracle confidence.
+            // Real-confidence mode must not depend on good_instruction.
             if (VP_ORACLE_CONF) {
                if (PAY.buf[index].vp_pred_avail && PAY.buf[index].good_instruction) {
                   db_t *actual = get_pipe()->peek(PAY.buf[index].db_index);
