@@ -171,6 +171,10 @@ private:
 		uint64_t free_list_head;
 		uint8_t  free_list_head_phase;
 		uint64_t checkpointed_gbm;
+
+		// Project 4: checkpointed VPQ tail for future rollback repair
+		uint64_t vpq_tail;
+		uint8_t  vpq_tail_phase;
 	};
 	vector<Branch_Checkpoint> Branch_Checkpoints;
 	/////////////////////////////////////////////////////////////////////
@@ -345,6 +349,9 @@ public:
 	// 3. checkpointed Global_Branch_Mask
 	/////////////////////////////////////////////////////////////////////
 	uint64_t checkpoint();	
+
+	void set_checkpoint_vpq_tail(uint64_t branch_ID, uint64_t vpq_tail, uint8_t vpq_tail_phase);
+	void get_checkpoint_vpq_tail(uint64_t branch_ID, uint64_t &vpq_tail, uint8_t &vpq_tail_phase) const;
 
 	//////////////////////////////////////////
 	// Functions related to Dispatch Stage. //

@@ -6,6 +6,7 @@
 #include "decode.h"
 #include "fu.h"
 #include "fetchunit_types.h"
+#include <cinttypes>
 #include <cstdio>
 
 typedef enum {
@@ -183,6 +184,20 @@ typedef struct {
    unsigned int branch_ID; // When a checkpoint is created for a branch,
                            // this is the branch's ID (its bit position
                            // in the Global Branch Mask).
+
+   ///////////////////////////////
+   // Project 4: Value Prediction
+   ///////////////////////////////
+   bool     vp_eligible;      // instruction is eligible for VP
+   bool     vp_pred_avail;    // predictor produced a prediction
+   bool     vp_confident;     // prediction deemed confident
+   bool     vp_used;          // dispatch actually injected predicted value
+   bool     vp_correct;       // later result of correctness check
+
+   uint64_t vp_prediction;    // predicted destination value
+
+   bool     vpq_valid;        // instruction has a VPQ entry
+   uint64_t vpq_idx;          // VPQ index
 
    ////////////////////////
    // Set by Dispatch Stage.

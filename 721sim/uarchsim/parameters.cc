@@ -13,6 +13,23 @@ bool ORACLE_DISAMBIG = false;
 bool PERFECT_ICACHE = false;
 bool PERFECT_DCACHE = false;
 
+// =========================
+// Project 4: Value Prediction
+// =========================
+bool VP_ENABLE = false;
+bool VP_PERFECT = false;
+bool VP_SVP = false;
+bool VP_ORACLE_CONF = false;
+
+bool VPRED_INTALU = false;
+bool VPRED_FPALU = false;
+bool VPRED_LOAD = false;
+
+uint64_t VPQ_SIZE = 0;
+uint64_t SVP_INDEX_BITS = 0;
+uint64_t SVP_TAG_BITS = 0;
+uint64_t SVP_CONFMAX = 0;
+
 // MDP
 uint64_t SSIT_SIZE = 4096;
 uint64_t LFST_SIZE = 1024;

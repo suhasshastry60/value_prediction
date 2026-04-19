@@ -114,9 +114,27 @@ payload::payload(unsigned int total_inflight_instr) {
 }
 
 unsigned int payload::push() {
-   unsigned int index;
+   unsigned int index = tail;
+   unsigned int odd_index = MOD(index + 1, PAYLOAD_BUFFER_SIZE);
 
-   index = tail;
+   // Clear only Project 4 VP metadata for both payload entries.
+   buf[index].vp_eligible = false;
+   buf[index].vp_pred_avail = false;
+   buf[index].vp_confident = false;
+   buf[index].vp_used = false;
+   buf[index].vp_correct = false;
+   buf[index].vp_prediction = 0;
+   buf[index].vpq_valid = false;
+   buf[index].vpq_idx = 0;
+
+   buf[odd_index].vp_eligible = false;
+   buf[odd_index].vp_pred_avail = false;
+   buf[odd_index].vp_confident = false;
+   buf[odd_index].vp_used = false;
+   buf[odd_index].vp_correct = false;
+   buf[odd_index].vp_prediction = 0;
+   buf[odd_index].vpq_valid = false;
+   buf[odd_index].vpq_idx = 0;
 
    // Increment tail by two, since each instruction is pre-allocated
    // two entries, even and odd, to accommodate instruction splitting.
@@ -126,7 +144,7 @@ unsigned int payload::push() {
    // Check for overflowing buf.
    assert(length <= PAYLOAD_BUFFER_SIZE);
 
-   return (index);
+   return index;
 }
 
 void payload::pop() {

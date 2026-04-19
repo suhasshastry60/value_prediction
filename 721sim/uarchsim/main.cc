@@ -6,6 +6,9 @@
 #include "extension.h"
 #include <dlfcn.h>
 #include <fesvr/option_parser.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cinttypes>
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
@@ -31,6 +34,9 @@ static void help() {
    fprintf(stderr, "  -p<n>              Simulate <n> processors\n");
    fprintf(stderr, "  -s<n>              Fast skip <n> instructions before microarchitectural simulation\n");
    fprintf(stderr, "  --perf=<pbp>,<pdc>,<pic>,<ptc>\tEach of pbp (perf. branch pred.), pdc (perf. D$), pic (perf. I$), and ptc (perf. T$), are 0 or 1\n");
+   fprintf(stderr, "  --vp-perf=1\n");
+   fprintf(stderr, "  --vp-svp=<VPQsize>,<oracleconf>,<#index bits>,<#tag bits>,<confmax>\n");
+   fprintf(stderr, "  --vp-eligible=<predINTALU>,<predFPALU>,<predLOAD>\n");
    fprintf(stderr, "  --cp=<n>           <n> branch checkpoints for mispredict recovery\n");
 
    fprintf(stderr, "  --bq=<n>           Branch queue (all branches b/w fetch and retire) has <n> entries\n");
@@ -247,6 +253,60 @@ static void set_store_set_flags(const char *config) {
    }
 }
 
+static void set_vp_perf(const char *config) {
+   uint64_t perfect;
+   if (sscanf(config, "%lu", &perfect) != 1) {
+      fprintf(stderr, "Incorrect usage of --vp-perf=1\n");
+      exit(-1);
+   }
+
+   if (perfect != 1) {
+      fprintf(stderr, "Incorrect usage of --vp-perf=1\n");
+      exit(-1);
+   }
+
+   VP_ENABLE = true;
+   VP_PERFECT = true;
+   VP_ORACLE_CONF = false;
+}
+
+static void set_vp_svp(const char *config) {
+   uint64_t vpq_size, oracleconf, index_bits, tag_bits, confmax;
+
+   if (sscanf(config, "%lu,%lu,%lu,%lu,%lu",
+              &vpq_size, &oracleconf, &index_bits, &tag_bits, &confmax) != 5) {
+      fprintf(stderr, "Incorrect usage of --vp-svp=<VPQsize>,<oracleconf>,<#index bits>,<#tag bits>,<confmax>\n");
+      exit(-1);
+   }
+
+   VP_ENABLE = true;
+   VP_SVP = true;
+   VP_ORACLE_CONF = (oracleconf ? true : false);
+
+   VPQ_SIZE = vpq_size;
+   SVP_INDEX_BITS = index_bits;
+   SVP_TAG_BITS = tag_bits;
+   SVP_CONFMAX = confmax;
+}
+
+static void set_vp_eligible(const char *config) {
+   uint64_t predINTALU, predFPALU, predLOAD;
+
+   if (sscanf(config, "%lu,%lu,%lu", &predINTALU, &predFPALU, &predLOAD) != 3) {
+      fprintf(stderr, "Incorrect usage of --vp-eligible=<predINTALU>,<predFPALU>,<predLOAD>\n");
+      exit(-1);
+   }
+
+   if (predINTALU > 1 || predFPALU > 1 || predLOAD > 1) {
+      fprintf(stderr, "--vp-eligible values must each be 0 or 1\n");
+      exit(-1);
+   }
+
+   VPRED_INTALU = (predINTALU ? true : false);
+   VPRED_FPALU  = (predFPALU ? true : false);
+   VPRED_LOAD   = (predLOAD ? true : false);
+}
+
 static void config_IC(const char *config) {
    unsigned int temp_size, temp_blocksize;
    if (sscanf(config, "%u:%u:%u:%u", &temp_size, &L1_IC_ASSOC, &temp_blocksize, &L1_IC_NUM_MHSRs) != 4) {
@@ -424,6 +484,9 @@ int main(int argc, char **argv) {
    parser.option(0, "L2L3exist", 1, [&](const char *s) { config_L2L3present(s); });
    parser.option(0, "MEMLAT", 1, [&](const char *s) { L1_IC_MISS_LATENCY = L1_DC_MISS_LATENCY = L2_MISS_LATENCY = atoi(s); });
    parser.option(0, "perf", 1, [&](const char *s) { set_perfect_flags(s); });
+   parser.option(0, "vp-perf", 1, [&](const char *s) { set_vp_perf(s); });
+   parser.option(0, "vp-svp", 1, [&](const char *s) { set_vp_svp(s); });
+   parser.option(0, "vp-eligible", 1, [&](const char *s) { set_vp_eligible(s); });
    parser.option(0, "cp", 1, [&](const char *s) { NUM_CHECKPOINTS = atoi(s); });
 
    parser.option(0, "bq", 1, [&](const char *s) {BQ_SIZE = atoi(s); AUTO_BQ_SIZE = false; });
@@ -467,6 +530,12 @@ int main(int argc, char **argv) {
    auto argv1 = parser.parse(argv);
    if (!*argv1)
       help();
+
+   if (VP_PERFECT && VP_SVP) {
+      fprintf(stderr, "Choose only one value predictor.\n");
+      exit(-1);
+   }
+
    std::vector<std::string> htif_args(argv1, (const char *const *) argv + argc);
 
 #ifdef RISCV_MICRO_CHECKER

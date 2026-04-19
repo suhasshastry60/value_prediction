@@ -14,6 +14,23 @@ extern bool ORACLE_DISAMBIG;
 extern bool PERFECT_ICACHE;
 extern bool PERFECT_DCACHE;
 
+// =========================
+// Project 4: Value Prediction
+// =========================
+extern bool VP_ENABLE;
+extern bool VP_PERFECT;
+extern bool VP_SVP;
+extern bool VP_ORACLE_CONF;
+
+extern bool VPRED_INTALU;
+extern bool VPRED_FPALU;
+extern bool VPRED_LOAD;
+
+extern uint64_t VPQ_SIZE;
+extern uint64_t SVP_INDEX_BITS;
+extern uint64_t SVP_TAG_BITS;
+extern uint64_t SVP_CONFMAX;
+
 // MDP
 extern uint64_t SSIT_SIZE;
 extern uint64_t LFST_SIZE;

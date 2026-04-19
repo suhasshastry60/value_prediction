@@ -42,6 +42,8 @@ renamer::renamer(uint64_t logic_reg_count,
 		Branch_Checkpoints[i].free_list_head = 0;
 		Branch_Checkpoints[i].free_list_head_phase = 0;
 		Branch_Checkpoints[i].checkpointed_gbm = 0;
+		Branch_Checkpoints[i].vpq_tail = 0;
+		Branch_Checkpoints[i].vpq_tail_phase = 0;
 	}
 
 	Free_List_size = num_phys_regs - num_logic_regs;
@@ -151,6 +153,18 @@ uint64_t renamer::checkpoint( ) {
 	Global_Branch_Mask &= valid_branch_mask;
 
 	return id;
+}
+
+void renamer::set_checkpoint_vpq_tail(uint64_t branch_ID, uint64_t vpq_tail, uint8_t vpq_tail_phase) {
+	assert(branch_ID < num_branches);
+	Branch_Checkpoints[branch_ID].vpq_tail = vpq_tail;
+	Branch_Checkpoints[branch_ID].vpq_tail_phase = vpq_tail_phase;
+}
+
+void renamer::get_checkpoint_vpq_tail(uint64_t branch_ID, uint64_t &vpq_tail, uint8_t &vpq_tail_phase) const {
+	assert(branch_ID < num_branches);
+	vpq_tail = Branch_Checkpoints[branch_ID].vpq_tail;
+	vpq_tail_phase = Branch_Checkpoints[branch_ID].vpq_tail_phase;
 }
 
 bool renamer::stall_dispatch( uint64_t bundle_inst) {
