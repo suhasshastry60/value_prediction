@@ -78,11 +78,21 @@ void pipeline_t::execute(unsigned int lane_number) {
                if (PAY.buf[index].vpq_valid)
                   REN->vpq_deposit(PAY.buf[index].vpq_idx, PAY.buf[index].C_value.dw);
 
+               if (PAY.buf[index].vp_pred_avail)
+                  PAY.buf[index].vp_correct = (PAY.buf[index].vp_prediction == PAY.buf[index].C_value.dw);
+               else
+                  PAY.buf[index].vp_correct = false;
+
+               if (PAY.buf[index].vp_used && !PAY.buf[index].vp_correct)
+                  set_value_misprediction(PAY.buf[index].AL_index);
+
                if (!PAY.buf[index].vp_used)
                   IQ.wakeup(PAY.buf[index].C_phys_reg, true);
 
                REN->set_ready(PAY.buf[index].C_phys_reg);
-               REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
+
+               if (!PAY.buf[index].vp_used || !PAY.buf[index].vp_correct)
+                  REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
             }
             // FIX_ME #13 END
          }
@@ -144,7 +154,16 @@ void pipeline_t::execute(unsigned int lane_number) {
             if (PAY.buf[index].vpq_valid)
                REN->vpq_deposit(PAY.buf[index].vpq_idx, PAY.buf[index].C_value.dw);
 
-            REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
+            if (PAY.buf[index].vp_pred_avail)
+               PAY.buf[index].vp_correct = (PAY.buf[index].vp_prediction == PAY.buf[index].C_value.dw);
+            else
+               PAY.buf[index].vp_correct = false;
+
+            if (PAY.buf[index].vp_used && !PAY.buf[index].vp_correct)
+               set_value_misprediction(PAY.buf[index].AL_index);
+
+            if (!PAY.buf[index].vp_used || !PAY.buf[index].vp_correct)
+               REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
          }
          // FIX_ME #14 END
       }
@@ -263,11 +282,21 @@ void pipeline_t::load_replay() {
          if (PAY.buf[index].vpq_valid)
             REN->vpq_deposit(PAY.buf[index].vpq_idx, PAY.buf[index].C_value.dw);
 
+         if (PAY.buf[index].vp_pred_avail)
+            PAY.buf[index].vp_correct = (PAY.buf[index].vp_prediction == PAY.buf[index].C_value.dw);
+         else
+            PAY.buf[index].vp_correct = false;
+
+         if (PAY.buf[index].vp_used && !PAY.buf[index].vp_correct)
+            set_value_misprediction(PAY.buf[index].AL_index);
+
          if (!PAY.buf[index].vp_used)
             IQ.wakeup(PAY.buf[index].C_phys_reg, true);
 
          REN->set_ready(PAY.buf[index].C_phys_reg);
-         REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
+
+         if (!PAY.buf[index].vp_used || !PAY.buf[index].vp_correct)
+            REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
          // FIX_ME #18a END
       }
 

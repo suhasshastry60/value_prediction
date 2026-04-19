@@ -226,6 +226,16 @@ void pipeline_t::rename2() {
                             PAY.buf[index].vp_confident,
                             PAY.buf[index].vp_prediction);
 
+            if (VP_ORACLE_CONF) {
+               if (PAY.buf[index].vp_pred_avail && PAY.buf[index].good_instruction) {
+                  db_t *actual = get_pipe()->peek(PAY.buf[index].db_index);
+                  PAY.buf[index].vp_confident = (PAY.buf[index].vp_prediction == actual->a_rdst[0].value);
+               }
+               else {
+                  PAY.buf[index].vp_confident = false;
+               }
+            }
+
             PAY.buf[index].vpq_idx = REN->vpq_alloc(PAY.buf[index].pc);
             PAY.buf[index].vpq_valid = true;
          }
