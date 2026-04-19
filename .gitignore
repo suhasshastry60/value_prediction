@@ -2,3 +2,6 @@ build
 run/473.astar_rivers_ref.252.0.28.gz/
 run/validation_runs/microbenchmark_runs/stats.*
 .codex
+run/400.perlbench_splitmail_ref.2724.0.44.gz/
+run/473.astar_biglakes_ref.1844.0.50.gz
+run/validation_runs/*.log

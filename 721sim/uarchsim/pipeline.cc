@@ -451,8 +451,8 @@ pipeline_t::pipeline_t(
 
       if (VP_PERFECT) {
          fprintf(stats_log, "VALUE PREDICTOR = perfect\n");
-         fprintf(stats_log, "   Total storage cost (bits) = 0 bits\n");
-         fprintf(stats_log, "   Total storage cost (bytes) = 0.00 B (0.00 KB)\n");
+         fprintf(stats_log, "\nCOST ACCOUNTING\n");
+         fprintf(stats_log, "  Impossible.\n");
       }
       else if (VP_SVP) {
          uint64_t svp_entries = (1ULL << SVP_INDEX_BITS);
