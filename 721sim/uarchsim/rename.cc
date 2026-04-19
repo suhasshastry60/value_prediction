@@ -1,4 +1,24 @@
 #include "pipeline.h"
+#include "debug.h"
+
+#define IS_INTALU(flags) ((flags) & (F_ICOMP))
+#define IS_FPALU(flags)  ((flags) & (F_FCOMP))
+
+static inline bool vp_eligible_inst(const payload_t &p) {
+   if (!p.C_valid)
+      return false;
+
+   if (IS_INTALU(p.flags))
+      return VPRED_INTALU;
+
+   if (IS_FPALU(p.flags))
+      return VPRED_FPALU;
+
+   if (IS_LOAD(p.flags) && !IS_AMO(p.flags))
+      return VPRED_LOAD;
+
+   return false;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -117,6 +137,27 @@ void pipeline_t::rename2() {
          break; // Not a valid instruction: Reached the end of the rename bundle so exit loop.
 
       index = RENAME2[i].index;
+
+      PAY.buf[index].vp_eligible   = vp_eligible_inst(PAY.buf[index]);
+      PAY.buf[index].vp_pred_avail = false;
+      PAY.buf[index].vp_confident  = false;
+      PAY.buf[index].vp_used       = false;
+      PAY.buf[index].vp_correct    = false;
+      PAY.buf[index].vp_prediction = 0;
+      PAY.buf[index].vpq_valid     = false;
+      PAY.buf[index].vpq_idx       = 0;
+
+      if (VP_PERFECT && PAY.buf[index].vp_eligible && PAY.buf[index].good_instruction) {
+         db_t *actual = get_pipe()->peek(PAY.buf[index].db_index);
+
+         PAY.buf[index].vp_pred_avail = true;
+         PAY.buf[index].vp_confident  = true;
+         PAY.buf[index].vp_prediction = actual->a_rdst[0].value;
+
+         printf("VP PERF: pc=0x%lx pred=%lu\n",
+                PAY.buf[index].pc,
+                PAY.buf[index].vp_prediction);
+      }
 
       // FIX_ME #3
       // Rename source registers (first) and destination register (second).

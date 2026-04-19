@@ -75,9 +75,10 @@ void pipeline_t::execute(unsigned int lane_number) {
             // FIX_ME #13 BEGIN
             if (hit && PAY.buf[index].C_valid) 
             {
-               IQ.wakeup(PAY.buf[index].C_phys_reg, true);
-                REN->set_ready(PAY.buf[index].C_phys_reg);
-             REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
+               if (!PAY.buf[index].vp_used)
+                  IQ.wakeup(PAY.buf[index].C_phys_reg, true);
+               REN->set_ready(PAY.buf[index].C_phys_reg);
+               REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
             }
             // FIX_ME #13 END
          }
@@ -195,7 +196,8 @@ void pipeline_t::execute(unsigned int lane_number) {
          // FIX_ME #11b BEGIN
          if (PAY.buf[index].C_valid &&!IS_LOAD(PAY.buf[index].flags)&& !IS_AMO(PAY.buf[index].flags)) 
          {
-            IQ.wakeup(PAY.buf[index].C_phys_reg, true);
+            if (!PAY.buf[index].vp_used)
+               IQ.wakeup(PAY.buf[index].C_phys_reg, true);
             REN->set_ready(PAY.buf[index].C_phys_reg);
          }
          // FIX_ME #11b END
@@ -251,7 +253,8 @@ void pipeline_t::load_replay() {
          // 2. See #13 (in execute.cc), and implement steps 3a,3b,3c.
 
          // FIX_ME #18a BEGIN
-         IQ.wakeup(PAY.buf[index].C_phys_reg, true);
+         if (!PAY.buf[index].vp_used)
+            IQ.wakeup(PAY.buf[index].C_phys_reg, true);
          REN->set_ready(PAY.buf[index].C_phys_reg);
          REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
          // FIX_ME #18a END

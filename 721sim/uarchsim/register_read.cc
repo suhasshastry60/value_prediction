@@ -50,7 +50,8 @@ void pipeline_t::register_read(unsigned int lane_number) {
       if (PAY.buf[index].C_valid && lat== 1 && !IS_LOAD(PAY.buf[index].flags) &&!IS_AMO(PAY.buf[index].flags)) 
          {
 
-         IQ.wakeup(PAY.buf[index].C_phys_reg, true);
+         if (!PAY.buf[index].vp_used)
+            IQ.wakeup(PAY.buf[index].C_phys_reg, true);
 
          REN->set_ready(PAY.buf[index].C_phys_reg);
       }
