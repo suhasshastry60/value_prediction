@@ -51,6 +51,22 @@ static void print_cache_config(FILE *fp, unsigned int sets, unsigned int assoc, 
    fprintf(fp, "   MHSRs = %d\n", MHSRs);
 }
 
+static uint64_t ceil_log2_u64(uint64_t x) {
+   if (x <= 1) return 0;
+   uint64_t p = 0;
+   uint64_t v = 1;
+   while (v < x) {
+      v <<= 1;
+      p++;
+   }
+   return p;
+}
+
+static double pct_u64(uint64_t count, uint64_t total) {
+   if (total == 0) return 0.0;
+   return (100.0 * (double) count) / (double) total;
+}
+
 
 pipeline_t::pipeline_t(
    sim_t *_sim,
@@ -89,6 +105,15 @@ pipeline_t::pipeline_t(
 
    // Initialize extra wait time for inum.
    extra_wait_time_for_inum = 0;
+
+   // Project 4: VPU measurements.
+   vpmeas_ineligible    = 0;
+   vpmeas_eligible      = 0;
+   vpmeas_miss          = 0;
+   vpmeas_conf_corr     = 0;
+   vpmeas_conf_incorr   = 0;
+   vpmeas_unconf_corr   = 0;
+   vpmeas_unconf_incorr = 0;
 
    /////////////////////////////////////////////////////////////
    // Pipeline widths.
@@ -414,6 +439,54 @@ pipeline_t::pipeline_t(
    fprintf(stats_log, "IBP_BHR_LENGTH = %d\n", IBP_BHR_LENGTH);
    fprintf(stats_log, "ENABLE_TRACE_CACHE = %d\n", (ENABLE_TRACE_CACHE ? 1 : 0));
 
+   if (VP_ENABLE) {
+      fprintf(stats_log, "\n=== VALUE PREDICTOR ============================================================\n\n");
+
+      fprintf(stats_log, "VP-eligible configuration:\n");
+      fprintf(stats_log, "   predINTALU = %d\n", VPRED_INTALU ? 1 : 0);
+      fprintf(stats_log, "   predFPALU  = %d\n", VPRED_FPALU ? 1 : 0);
+      fprintf(stats_log, "   predLOAD   = %d\n", VPRED_LOAD ? 1 : 0);
+
+      fprintf(stats_log, "\n");
+
+      if (VP_PERFECT) {
+         fprintf(stats_log, "VALUE PREDICTOR = perfect\n");
+         fprintf(stats_log, "   Total storage cost (bits) = 0 bits\n");
+         fprintf(stats_log, "   Total storage cost (bytes) = 0.00 B (0.00 KB)\n");
+      }
+      else if (VP_SVP) {
+         uint64_t svp_entries = (1ULL << SVP_INDEX_BITS);
+         uint64_t conf_bits = ceil_log2_u64(SVP_CONFMAX + 1);
+         uint64_t inst_bits = ceil_log2_u64(VPQ_SIZE);
+         uint64_t bits_per_entry = SVP_TAG_BITS + conf_bits + 64 + 64 + inst_bits;
+         uint64_t total_bits = svp_entries * bits_per_entry;
+         double total_bytes = (double) total_bits / 8.0;
+         double total_kb = total_bytes / 1024.0;
+
+         fprintf(stats_log, "VALUE PREDICTOR = stride (Project 4 spec. implementation)\n");
+         fprintf(stats_log, "   VPQsize         = %" PRIu64 "\n", VPQ_SIZE);
+         fprintf(stats_log, "   oracleconf      = %d (%s confidence)\n",
+                 VP_ORACLE_CONF ? 1 : 0,
+                 VP_ORACLE_CONF ? "oracle" : "real");
+         fprintf(stats_log, "   # index bits    = %" PRIu64 "\n", SVP_INDEX_BITS);
+         fprintf(stats_log, "   # tag bits      = %" PRIu64 "\n", SVP_TAG_BITS);
+         fprintf(stats_log, "   confmax         = %" PRIu64 "\n", SVP_CONFMAX);
+
+         fprintf(stats_log, "\nCOST ACCOUNTING\n");
+         fprintf(stats_log, "   One SVP entry:\n");
+         fprintf(stats_log, "      tag           : %3" PRIu64 " bits  // num_tag_bits\n", SVP_TAG_BITS);
+         fprintf(stats_log, "      conf          : %3" PRIu64 " bits  // formula: (uint64_t)ceil(log2((double)(confmax+1)))\n", conf_bits);
+         fprintf(stats_log, "      retired_value : %3d bits  // RISCV64 integer size.\n", 64);
+         fprintf(stats_log, "      stride        : %3d bits  // RISCV64 integer size. Competition opportunity: truncate stride to far fewer bits based on stride distribution of stride-predictable instructions.\n", 64);
+         fprintf(stats_log, "      instance ctr  : %3" PRIu64 " bits  // formula: (uint64_t)ceil(log2((double)VPQsize))\n", inst_bits);
+         fprintf(stats_log, "      -------------------------\n");
+         fprintf(stats_log, "      bits/SVP entry: %" PRIu64 " bits\n", bits_per_entry);
+         fprintf(stats_log, "   Total storage cost (bits) = (%" PRIu64 " SVP entries x %" PRIu64 " bits/SVP entry) = %" PRIu64 " bits\n",
+                 svp_entries, bits_per_entry, total_bits);
+         fprintf(stats_log, "   Total storage cost (bytes) = %.2f B (%.2f KB)\n", total_bytes, total_kb);
+      }
+   }
+
    fprintf(stats_log, "\n=== INTERNAL SIMULATOR STRUCTURES ===============================================\n\n");
 
    fprintf(stats_log, "PAYLOAD_BUFFER_SIZE = %d\n", PAY.get_size());
@@ -460,6 +533,26 @@ pipeline_t::~pipeline_t() {
    FetchUnit->output(stats->get_counter("commit_count"), stats->get_counter("cycle_count"), stats_log);
    LSU.dump_stats(extra_wait_time_for_inum, stats_log);
 
+   uint64_t vpmeas_total = vpmeas_ineligible + vpmeas_eligible;
+
+   if (VP_ENABLE) {
+      fprintf(stats_log, "VPU MEASUREMENTS-----------------------------------\n");
+      fprintf(stats_log, "vpmeas_ineligible         : %10" PRIu64 " (%6.2f%%) // Not eligible for value prediction.\n",
+              vpmeas_ineligible, pct_u64(vpmeas_ineligible, vpmeas_total));
+      fprintf(stats_log, "vpmeas_eligible           : %10" PRIu64 " (%6.2f%%) // Eligible for value prediction.\n",
+              vpmeas_eligible, pct_u64(vpmeas_eligible, vpmeas_total));
+      fprintf(stats_log, "   vpmeas_miss            : %10" PRIu64 " (%6.2f%%) // VPU was unable to generate a value prediction (e.g., SVP miss).\n",
+              vpmeas_miss, pct_u64(vpmeas_miss, vpmeas_total));
+      fprintf(stats_log, "   vpmeas_conf_corr       : %10" PRIu64 " (%6.2f%%) // VPU generated a confident and correct value prediction.\n",
+              vpmeas_conf_corr, pct_u64(vpmeas_conf_corr, vpmeas_total));
+      fprintf(stats_log, "   vpmeas_conf_incorr     : %10" PRIu64 " (%6.2f%%) // VPU generated a confident and incorrect value prediction. (MISPREDICTION)\n",
+              vpmeas_conf_incorr, pct_u64(vpmeas_conf_incorr, vpmeas_total));
+      fprintf(stats_log, "   vpmeas_unconf_corr     : %10" PRIu64 " (%6.2f%%) // VPU generated an unconfident and correct value prediction. (LOST OPPORTUNITY)\n",
+              vpmeas_unconf_corr, pct_u64(vpmeas_unconf_corr, vpmeas_total));
+      fprintf(stats_log, "   vpmeas_unconf_incorr   : %10" PRIu64 " (%6.2f%%) // VPU generated an unconfident and incorrect value prediction.\n",
+              vpmeas_unconf_incorr, pct_u64(vpmeas_unconf_incorr, vpmeas_total));
+   }
+
 #ifdef RISCV_MICRO_DEBUG
    fclose(this->fetch_log);
    fclose(this->decode_log);
@@ -484,6 +577,33 @@ inline void pipeline_t::update_histogram(size_t pc) {
    size_t idx = pc >> 2;
    pc_histogram[idx]++;
 #endif
+}
+
+void pipeline_t::vp_measure(payload_t *pay) {
+   if (!VP_ENABLE) return;
+
+   if (!pay->vp_eligible) {
+      vpmeas_ineligible++;
+      return;
+   }
+
+   vpmeas_eligible++;
+
+   if (!pay->vp_pred_avail) {
+      vpmeas_miss++;
+   }
+   else if (pay->vp_confident && pay->vp_correct) {
+      vpmeas_conf_corr++;
+   }
+   else if (pay->vp_confident && !pay->vp_correct) {
+      vpmeas_conf_incorr++;
+   }
+   else if (!pay->vp_confident && pay->vp_correct) {
+      vpmeas_unconf_corr++;
+   }
+   else {
+      vpmeas_unconf_incorr++;
+   }
 }
 
 

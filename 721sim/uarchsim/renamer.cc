@@ -227,8 +227,8 @@ uint64_t renamer::svp_tag(uint64_t pc) const {
 
 bool renamer::svp_hit(uint64_t pc, uint64_t &idx) const {
 	idx = svp_index(pc);
-	if (!SVP[idx].valid) return false;
 	if (SVP_TAG_BITS == 0) return true;
+	if (!SVP[idx].valid) return false;
 	return (SVP[idx].tag == svp_tag(pc));
 }
 
@@ -330,6 +330,9 @@ void renamer::vp_retire(uint64_t vpq_idx) {
 	bool hit = svp_hit(pc, idx);
 
 	if (hit) {
+		SVP[idx].valid = true;
+		SVP[idx].tag = svp_tag(pc);
+
 		int64_t new_stride = (int64_t) value - (int64_t) SVP[idx].retired_value;
 
 		if (new_stride == SVP[idx].stride) {

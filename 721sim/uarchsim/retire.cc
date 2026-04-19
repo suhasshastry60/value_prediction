@@ -130,6 +130,7 @@ void pipeline_t::retire(size_t &instret) {
          // Keep track of the number of retired instructions.
          // Split instructions should only count as one architectural instruction, therefore, only the second uop should increment the count.
          if (!PAY.buf[PAY.head].split || !PAY.buf[PAY.head].upper) {
+            vp_measure(&PAY.buf[PAY.head]);
             num_insn++;
             instret++;
             inc_counter(commit_count);
@@ -236,6 +237,9 @@ void pipeline_t::retire(size_t &instret) {
          }
 
          // Keep track of the number of retired instructions.
+         if (!PAY.buf[PAY.head].split || !PAY.buf[PAY.head].upper) {
+            vp_measure(&PAY.buf[PAY.head]);
+         }
          instret++;
          num_insn++;
          inc_counter(commit_count);
