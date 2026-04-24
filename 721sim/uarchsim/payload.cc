@@ -117,7 +117,7 @@ unsigned int payload::push() {
    unsigned int index = tail;
    unsigned int odd_index = MOD(index + 1, PAYLOAD_BUFFER_SIZE);
 
-   // Clear only Project 4 VP metadata for both payload entries.
+   // Reset VP fields for both payload entries.
    buf[index].vp_eligible = false;
    buf[index].vp_pred_avail = false;
    buf[index].vp_confident = false;

@@ -389,7 +389,7 @@ public:
    uint64_t num_insn;
    double extra_wait_time_for_inum;
 
-   // Project 4: VPU measurements.
+   // VPU measurements.
    uint64_t vpmeas_ineligible;
    uint64_t vpmeas_eligible;
    uint64_t vpmeas_miss;
@@ -398,7 +398,7 @@ public:
    uint64_t vpmeas_unconf_corr;
    uint64_t vpmeas_unconf_incorr;
 
-   // Project 4 Phase 2 diagnostics.
+   // VPU debug prints
    uint64_t vpq_stall_count;
    uint64_t value_mispred_count;
    uint64_t stride_overflow_count;

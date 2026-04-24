@@ -172,7 +172,7 @@ private:
 		uint8_t  free_list_head_phase;
 		uint64_t checkpointed_gbm;
 
-		// Project 4: checkpointed VPQ tail for future rollback repair
+		// VPQ tail checkpoint
 		uint64_t vpq_tail;
 		uint8_t  vpq_tail_phase;
 		uint64_t path_history;

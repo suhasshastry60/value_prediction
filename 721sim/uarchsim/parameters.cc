@@ -13,9 +13,8 @@ bool ORACLE_DISAMBIG = false;
 bool PERFECT_ICACHE = false;
 bool PERFECT_DCACHE = false;
 
-// =========================
-// Project 4: Value Prediction
-// =========================
+// Value Prediction
+
 bool VP_ENABLE = false;
 bool VP_PERFECT = false;
 bool VP_SVP = false;

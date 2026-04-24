@@ -106,7 +106,7 @@ pipeline_t::pipeline_t(
    // Initialize extra wait time for inum.
    extra_wait_time_for_inum = 0;
 
-   // Project 4: VPU measurements.
+   // VPU measurements.
    vpmeas_ineligible    = 0;
    vpmeas_eligible      = 0;
    vpmeas_miss          = 0;

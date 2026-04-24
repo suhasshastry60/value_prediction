@@ -509,8 +509,7 @@ void renamer::pathsvp_train(uint64_t pc,
 	}
 }
 
-// Project 4: SVP training uses VPQ head contents at retirement, not PAY.
-// PAY is only used to determine when to call this function and for stats.
+// Train from the in-order VPQ entry at retirement.
 void renamer::vp_retire(uint64_t vpq_idx) {
 	assert(VP_SVP);
 	assert(!ring_empty(VPQ_head, VPQ_tail, VPQ_head_phase, VPQ_tail_phase));

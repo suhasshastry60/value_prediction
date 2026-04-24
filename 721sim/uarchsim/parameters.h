@@ -14,9 +14,8 @@ extern bool ORACLE_DISAMBIG;
 extern bool PERFECT_ICACHE;
 extern bool PERFECT_DCACHE;
 
-// =========================
-// Project 4: Value Prediction
-// =========================
+// Value Prediction
+
 extern bool VP_ENABLE;
 extern bool VP_PERFECT;
 extern bool VP_SVP;

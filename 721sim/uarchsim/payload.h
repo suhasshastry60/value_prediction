@@ -185,9 +185,9 @@ typedef struct {
                            // this is the branch's ID (its bit position
                            // in the Global Branch Mask).
 
-   ///////////////////////////////
-   // Project 4: Value Prediction
-   ///////////////////////////////
+
+   // Value prediction
+
    bool     vp_eligible;      // instruction is eligible for VP
    bool     vp_pred_avail;    // predictor produced a prediction
    bool     vp_confident;     // prediction deemed confident
@@ -199,10 +199,10 @@ typedef struct {
    bool     vpq_valid;        // instruction has a VPQ entry
    uint64_t vpq_idx;          // VPQ index
 
-   // Phase 2: Path-SVP fallback metadata.
-   bool     pathsvp_alloc;        // instruction touched Path-SVP / should train it
-   bool     pathsvp_inst_inc;     // Path-SVP instance was incremented at rename
-   bool     pathsvp_used;         // Path-SVP provided the injected prediction
+   // Path-SVP state
+   bool     pathsvp_alloc;
+   bool     pathsvp_inst_inc;
+   bool     pathsvp_used;
    uint64_t pathsvp_idx;
    uint16_t pathsvp_tag;
 
