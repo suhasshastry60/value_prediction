@@ -20,6 +20,7 @@ bool VP_ENABLE = false;
 bool VP_PERFECT = false;
 bool VP_SVP = false;
 bool VP_ORACLE_CONF = false;
+bool VP_PHASE2 = false;
 
 bool VPRED_INTALU = false;
 bool VPRED_FPALU = false;

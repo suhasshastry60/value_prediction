@@ -115,6 +115,12 @@ pipeline_t::pipeline_t(
    vpmeas_unconf_corr   = 0;
    vpmeas_unconf_incorr = 0;
 
+   vpq_stall_count          = 0;
+   value_mispred_count      = 0;
+   stride_overflow_count    = 0;
+   blacklist_suppress_count = 0;
+   pathsvp_used_count       = 0;
+
    /////////////////////////////////////////////////////////////
    // Pipeline widths.
    /////////////////////////////////////////////////////////////

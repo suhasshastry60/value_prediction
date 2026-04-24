@@ -45,6 +45,7 @@ renamer::renamer(uint64_t logic_reg_count,
 		Branch_Checkpoints[i].checkpointed_gbm = 0;
 		Branch_Checkpoints[i].vpq_tail = 0;
 		Branch_Checkpoints[i].vpq_tail_phase = 0;
+		Branch_Checkpoints[i].path_history = 0;
 	}
 
 	Free_List_size = num_phys_regs - num_logic_regs;
@@ -113,12 +114,37 @@ renamer::renamer(uint64_t logic_reg_count,
 		VPQ[i].pc = 0;
 		VPQ[i].value = 0;
 		VPQ[i].value_valid = false;
+		VPQ[i].path_valid = false;
+		VPQ[i].path_inst_inc = false;
+		VPQ[i].path_idx = 0;
+		VPQ[i].path_tag = 0;
 	}
 
 	VPQ_head = 0;
 	VPQ_tail = 0;
 	VPQ_head_phase = 0;
 	VPQ_tail_phase = 0;
+
+	PathSVP.resize(PATHSVP_ENTRIES);
+	for (uint64_t i = 0; i < PATHSVP_ENTRIES; i++) {
+		PathSVP[i].valid = false;
+		PathSVP[i].tag = 0;
+		PathSVP[i].conf = 0;
+		PathSVP[i].retired_value = 0;
+		PathSVP[i].stride = 0;
+		PathSVP[i].instance = 0;
+	}
+
+	Path_History = 0;
+
+	VP_Blacklist_size = 512;
+	VP_Blacklist.resize(VP_Blacklist_size);
+	for (uint64_t i = 0; i < VP_Blacklist_size; i++) {
+		VP_Blacklist[i].valid = false;
+		VP_Blacklist[i].tag = 0;
+		VP_Blacklist[i].bad = 0;
+		VP_Blacklist[i].cooldown = 0;
+	}
 }
 
 renamer::~renamer() {
@@ -172,6 +198,7 @@ uint64_t renamer::checkpoint( ) {
 
 	// Store PREVIOUS Global_Branch_Mask
 	Branch_Checkpoints[id].checkpointed_gbm = Global_Branch_Mask;
+	Branch_Checkpoints[id].path_history = Path_History;
 
 	for (uint64_t l = 0; l < num_logic_regs; l++) {
 		Branch_Checkpoints[id].shadow_map_table[l] = Rename_Map_Table[l];
@@ -205,6 +232,75 @@ bool renamer::stall_vp(uint64_t bundle_vp) {
 	uint64_t occ = ring_occupancy(VPQ_head, VPQ_tail, VPQ_head_phase, VPQ_tail_phase, VPQ_size);
 	uint64_t free = VPQ_size - occ;
 	return (free < bundle_vp);
+}
+
+uint64_t renamer::vp_blacklist_hash(uint64_t pc) const {
+	uint64_t x = pc >> 2;
+	x ^= (pc >> 13);
+	x ^= (pc >> 27);
+	return x & (VP_Blacklist_size - 1);
+}
+
+bool renamer::vp_blacklisted(uint64_t pc) {
+	uint64_t idx = vp_blacklist_hash(pc);
+	uint16_t tag = (uint16_t)((pc >> 2) & 0xFFFF);
+
+	if (!VP_Blacklist[idx].valid)
+		return false;
+
+	if (VP_Blacklist[idx].tag != tag)
+		return false;
+
+	if (VP_Blacklist[idx].cooldown > 0) {
+		VP_Blacklist[idx].cooldown--;
+		return true;
+	}
+
+	return false;
+}
+
+bool renamer::vp_blacklist_check(uint64_t pc) {
+	return vp_blacklisted(pc);
+}
+
+uint64_t renamer::pathsvp_index(uint64_t pc) const {
+	uint64_t pc_part = pc >> 2;
+	return (pc_part ^ Path_History) & PATHSVP_INDEX_MASK;
+}
+
+uint16_t renamer::pathsvp_tag(uint64_t pc) const {
+	return (uint16_t)(((pc >> 2) ^ (Path_History >> 1)) & PATHSVP_TAG_MASK);
+}
+
+void renamer::path_history_update(uint64_t pc) {
+	Path_History = ((Path_History << 1) ^ (pc >> 2)) & PATHSVP_HIST_MASK;
+}
+
+void renamer::vp_blacklist_update(uint64_t pc, bool correct) {
+	uint64_t idx = vp_blacklist_hash(pc);
+	uint16_t tag = (uint16_t)((pc >> 2) & 0xFFFF);
+
+	if (!VP_Blacklist[idx].valid || VP_Blacklist[idx].tag != tag) {
+		VP_Blacklist[idx].valid = true;
+		VP_Blacklist[idx].tag = tag;
+		VP_Blacklist[idx].bad = 0;
+		VP_Blacklist[idx].cooldown = 0;
+	}
+
+	if (correct) {
+		if (VP_Blacklist[idx].bad > 0)
+			VP_Blacklist[idx].bad--;
+		return;
+	}
+
+	if (VP_Blacklist[idx].bad <= 13)
+		VP_Blacklist[idx].bad += 2;
+	else
+		VP_Blacklist[idx].bad = 15;
+
+	if (VP_Blacklist[idx].bad >= 4) {
+		VP_Blacklist[idx].cooldown = 96;
+	}
 }
 
 uint64_t renamer::svp_index(uint64_t pc) const {
@@ -262,6 +358,38 @@ void renamer::vp_predict(uint64_t pc,
 	confident = (SVP[idx].conf == SVP_CONFMAX);
 }
 
+void renamer::pathsvp_predict(uint64_t pc,
+                              bool &pred_avail,
+                              bool &confident,
+                              uint64_t &prediction,
+                              bool &inst_inc,
+                              uint64_t &path_idx,
+                              uint16_t &path_tag_out) {
+	pred_avail = false;
+	confident = false;
+	prediction = 0;
+	inst_inc = false;
+
+	path_idx = pathsvp_index(pc);
+	path_tag_out = pathsvp_tag(pc);
+
+	PathSVP_Entry &e = PathSVP[path_idx];
+	if (!e.valid || e.tag != path_tag_out) {
+		return;
+	}
+
+	e.instance++;
+	inst_inc = true;
+
+	int64_t pred =
+		(int64_t)e.retired_value +
+		((int64_t)e.instance * e.stride);
+
+	prediction = (uint64_t) pred;
+	pred_avail = true;
+	confident = (e.conf == SVP_CONFMAX);
+}
+
 uint64_t renamer::vpq_alloc(uint64_t pc) {
 	assert(VP_SVP);
 	assert(!stall_vp(1));
@@ -272,9 +400,25 @@ uint64_t renamer::vpq_alloc(uint64_t pc) {
 	VPQ[idx].pc = pc;
 	VPQ[idx].value = 0;
 	VPQ[idx].value_valid = false;
+	VPQ[idx].path_valid = false;
+	VPQ[idx].path_inst_inc = false;
+	VPQ[idx].path_idx = 0;
+	VPQ[idx].path_tag = 0;
 
 	advance_ptr(VPQ_tail, VPQ_tail_phase, VPQ_size);
 	return idx;
+}
+
+void renamer::vpq_set_path(uint64_t vpq_idx,
+                           uint64_t path_idx,
+                           uint16_t path_tag,
+                           bool inst_inc) {
+	assert(vpq_idx < VPQ_size);
+
+	VPQ[vpq_idx].path_valid = true;
+	VPQ[vpq_idx].path_idx = path_idx;
+	VPQ[vpq_idx].path_tag = path_tag;
+	VPQ[vpq_idx].path_inst_inc = inst_inc;
 }
 
 void renamer::vpq_deposit(uint64_t vpq_idx, uint64_t value) {
@@ -311,6 +455,60 @@ uint64_t renamer::vpq_count_pc(uint64_t pc) const {
 	return count;
 }
 
+uint64_t renamer::pathsvp_count_inflight(uint64_t path_idx, uint16_t path_tag) const {
+	uint64_t count = 0;
+	uint64_t idx = VPQ_head;
+	uint8_t phase = VPQ_head_phase;
+
+	while (!((idx == VPQ_tail) && (phase == VPQ_tail_phase))) {
+		if (VPQ[idx].valid &&
+		    VPQ[idx].path_valid &&
+		    VPQ[idx].path_idx == path_idx &&
+		    VPQ[idx].path_tag == path_tag) {
+			count++;
+		}
+
+		idx++;
+		if (idx >= VPQ_size) {
+			idx = 0;
+			phase ^= 1;
+		}
+	}
+
+	return count;
+}
+
+void renamer::pathsvp_train(uint64_t pc,
+                            uint64_t value,
+                            uint64_t path_idx,
+                            uint16_t path_tag_in) {
+	(void) pc;
+	PathSVP_Entry &e = PathSVP[path_idx];
+
+	if (e.valid && e.tag == path_tag_in) {
+		int64_t new_stride = (int64_t)value - (int64_t)e.retired_value;
+
+		if (new_stride == e.stride) {
+			if (e.conf < SVP_CONFMAX)
+				e.conf++;
+		}
+		else {
+			e.stride = new_stride;
+			e.conf = 0;
+		}
+
+		e.retired_value = value;
+	}
+	else {
+		e.valid = true;
+		e.tag = path_tag_in;
+		e.conf = 0;
+		e.retired_value = value;
+		e.stride = 0;
+		e.instance = pathsvp_count_inflight(path_idx, path_tag_in);
+	}
+}
+
 // Project 4: SVP training uses VPQ head contents at retirement, not PAY.
 // PAY is only used to determine when to call this function and for stats.
 void renamer::vp_retire(uint64_t vpq_idx) {
@@ -322,9 +520,17 @@ void renamer::vp_retire(uint64_t vpq_idx) {
 
 	uint64_t pc = VPQ[VPQ_head].pc;
 	uint64_t value = VPQ[VPQ_head].value;
+	bool path_valid = VPQ[VPQ_head].path_valid;
+	bool path_inst_inc = VPQ[VPQ_head].path_inst_inc;
+	uint64_t path_idx = VPQ[VPQ_head].path_idx;
+	uint16_t path_tag = VPQ[VPQ_head].path_tag;
 
 	VPQ[VPQ_head].valid = false;
 	VPQ[VPQ_head].value_valid = false;
+	VPQ[VPQ_head].path_valid = false;
+	VPQ[VPQ_head].path_inst_inc = false;
+	VPQ[VPQ_head].path_idx = 0;
+	VPQ[VPQ_head].path_tag = 0;
 
 	advance_ptr(VPQ_head, VPQ_head_phase, VPQ_size);
 
@@ -358,6 +564,16 @@ void renamer::vp_retire(uint64_t vpq_idx) {
 		SVP[idx].stride = (int64_t) value;
 		SVP[idx].instance = vpq_count_pc(pc);
 	}
+
+	if (path_valid) {
+		if (path_inst_inc) {
+			PathSVP_Entry &pe = PathSVP[path_idx];
+			if (pe.valid && pe.tag == path_tag && pe.instance > 0)
+				pe.instance--;
+		}
+
+		pathsvp_train(pc, value, path_idx, path_tag);
+	}
 }
 
 void renamer::vpq_restore_tail(uint64_t tail, uint8_t tail_phase) {
@@ -373,8 +589,18 @@ void renamer::vpq_restore_tail(uint64_t tail, uint8_t tail_phase) {
 				SVP[svp_idx].instance--;
 			}
 
+			if (VPQ[idx].path_valid && VPQ[idx].path_inst_inc) {
+				PathSVP_Entry &pe = PathSVP[VPQ[idx].path_idx];
+				if (pe.valid && pe.tag == VPQ[idx].path_tag && pe.instance > 0)
+					pe.instance--;
+			}
+
 			VPQ[idx].valid = false;
 			VPQ[idx].value_valid = false;
+			VPQ[idx].path_valid = false;
+			VPQ[idx].path_inst_inc = false;
+			VPQ[idx].path_idx = 0;
+			VPQ[idx].path_tag = 0;
 		}
 
 		idx++;
@@ -508,6 +734,8 @@ void renamer::resolve(uint64_t AL_index, uint64_t branch_ID, bool correct) {
 	Active_List_tail_phase = new_tail_phase;
 
 	if (VP_SVP) {
+		Path_History = Branch_Checkpoints[branch_ID].path_history;
+		path_history_update(Active_List[AL_index].PC);
 		vpq_restore_tail(Branch_Checkpoints[branch_ID].vpq_tail,
 		                 Branch_Checkpoints[branch_ID].vpq_tail_phase);
 	}
@@ -611,14 +839,23 @@ void renamer::squash() {
 		VPQ_tail = 0;
 		VPQ_head_phase = 0;
 		VPQ_tail_phase = 0;
+		Path_History = 0;
 
 		for (uint64_t i = 0; i < VPQ_size; i++) {
 			VPQ[i].valid = false;
 			VPQ[i].value_valid = false;
+			VPQ[i].path_valid = false;
+			VPQ[i].path_inst_inc = false;
+			VPQ[i].path_idx = 0;
+			VPQ[i].path_tag = 0;
 		}
 
 		for (uint64_t i = 0; i < SVP_num_entries; i++) {
 			SVP[i].instance = 0;
+		}
+
+		for (uint64_t i = 0; i < PATHSVP_ENTRIES; i++) {
+			PathSVP[i].instance = 0;
 		}
 	}
 }

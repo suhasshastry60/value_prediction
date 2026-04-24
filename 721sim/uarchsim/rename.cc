@@ -3,6 +3,7 @@
 
 #define IS_INTALU(flags) ((flags) & (F_ICOMP))
 #define IS_FPALU(flags)  ((flags) & (F_FCOMP))
+#define ENABLE_PATHSVP 1
 
 static inline bool vp_eligible_inst(const payload_t &p) {
    if (!p.C_valid)
@@ -129,10 +130,15 @@ void pipeline_t::rename2() {
    // This is achieved by doing nothing and proceeding to the next statements.
 
    // FIX_ME #2 BEGIN
-   if (REN->stall_branch(bundle_branch) ||
-       REN->stall_reg(bundle_dst) ||
-       REN->stall_vp(bundle_vp))
-         return;
+   bool stall_branch = REN->stall_branch(bundle_branch);
+   bool stall_reg    = REN->stall_reg(bundle_dst);
+   bool stall_vp     = REN->stall_vp(bundle_vp);
+
+   if (stall_vp)
+      vpq_stall_count++;
+
+   if (stall_branch || stall_reg || stall_vp)
+      return;
    // FIX_ME #2 END
 
    //
@@ -211,6 +217,11 @@ void pipeline_t::rename2() {
       PAY.buf[index].vp_prediction = 0;
       PAY.buf[index].vpq_valid     = false;
       PAY.buf[index].vpq_idx       = 0;
+      PAY.buf[index].pathsvp_alloc = false;
+      PAY.buf[index].pathsvp_inst_inc = false;
+      PAY.buf[index].pathsvp_used = false;
+      PAY.buf[index].pathsvp_idx = 0;
+      PAY.buf[index].pathsvp_tag = 0;
 
       if (PAY.buf[index].vp_eligible) {
          if (VP_PERFECT && PAY.buf[index].good_instruction) {
@@ -228,20 +239,76 @@ void pipeline_t::rename2() {
 
             // Project 4: checker truth is used only for perfect VP and oracle confidence.
             // Real-confidence mode must not depend on good_instruction.
-            if (VP_ORACLE_CONF) {
-               if (PAY.buf[index].vp_pred_avail && PAY.buf[index].good_instruction) {
-                  db_t *actual = get_pipe()->peek(PAY.buf[index].db_index);
-                  PAY.buf[index].vp_confident = (PAY.buf[index].vp_prediction == actual->a_rdst[0].value);
-               }
+	            if (VP_ORACLE_CONF) {
+	               if (PAY.buf[index].vp_pred_avail && PAY.buf[index].good_instruction) {
+	                  db_t *actual = get_pipe()->peek(PAY.buf[index].db_index);
+	                  PAY.buf[index].vp_confident = (PAY.buf[index].vp_prediction == actual->a_rdst[0].value);
+	               }
                else {
-                  PAY.buf[index].vp_confident = false;
-               }
-            }
+	                  PAY.buf[index].vp_confident = false;
+	               }
+	            }
 
-            PAY.buf[index].vpq_idx = REN->vpq_alloc(PAY.buf[index].pc);
-            PAY.buf[index].vpq_valid = true;
-         }
+#if ENABLE_PATHSVP
+	            if (VP_PHASE2 && !VP_ORACLE_CONF && !PAY.buf[index].vp_confident) {
+	               bool path_avail = false;
+	               bool path_conf = false;
+	               uint64_t path_pred = 0;
+	               bool path_inst_inc = false;
+	               uint64_t path_idx = 0;
+	               uint16_t path_tag = 0;
+
+	               REN->pathsvp_predict(PAY.buf[index].pc,
+	                                     path_avail,
+	                                     path_conf,
+	                                     path_pred,
+	                                     path_inst_inc,
+	                                     path_idx,
+	                                     path_tag);
+
+	               PAY.buf[index].pathsvp_alloc = true;
+	               PAY.buf[index].pathsvp_inst_inc = path_inst_inc;
+	               PAY.buf[index].pathsvp_used = false;
+	               PAY.buf[index].pathsvp_idx = path_idx;
+	               PAY.buf[index].pathsvp_tag = path_tag;
+
+	               if (path_avail)
+	                  PAY.buf[index].vp_pred_avail = true;
+
+	               if (path_conf) {
+	                  PAY.buf[index].vp_confident = true;
+	                  PAY.buf[index].vp_prediction = path_pred;
+	                  PAY.buf[index].pathsvp_used = true;
+	               }
+	            }
+#endif
+
+	            if (VP_PHASE2 && !VP_ORACLE_CONF && PAY.buf[index].vp_confident) {
+	               if (REN->vp_blacklist_check(PAY.buf[index].pc)) {
+	                  PAY.buf[index].vp_confident = false;
+	                  PAY.buf[index].pathsvp_used = false;
+	                  blacklist_suppress_count++;
+	               }
+	            }
+
+	            PAY.buf[index].vpq_idx = REN->vpq_alloc(PAY.buf[index].pc);
+	            PAY.buf[index].vpq_valid = true;
+
+#if ENABLE_PATHSVP
+	            if (VP_PHASE2 && PAY.buf[index].pathsvp_alloc) {
+	               REN->vpq_set_path(PAY.buf[index].vpq_idx,
+	                                 PAY.buf[index].pathsvp_idx,
+	                                 PAY.buf[index].pathsvp_tag,
+	                                 PAY.buf[index].pathsvp_inst_inc);
+	            }
+#endif
+	         }
       }
+
+#if ENABLE_PATHSVP
+      if (VP_PHASE2 && VP_SVP)
+         REN->path_history_update(PAY.buf[index].pc);
+#endif
    }
 
    //

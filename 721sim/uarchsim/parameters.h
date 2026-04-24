@@ -21,6 +21,7 @@ extern bool VP_ENABLE;
 extern bool VP_PERFECT;
 extern bool VP_SVP;
 extern bool VP_ORACLE_CONF;
+extern bool VP_PHASE2;
 
 extern bool VPRED_INTALU;
 extern bool VPRED_FPALU;

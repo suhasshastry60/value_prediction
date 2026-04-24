@@ -83,8 +83,15 @@ void pipeline_t::execute(unsigned int lane_number) {
                else
                   PAY.buf[index].vp_correct = false;
 
-               if (PAY.buf[index].vp_used && !PAY.buf[index].vp_correct)
-                  set_value_misprediction(PAY.buf[index].AL_index);
+	               if (PAY.buf[index].vp_used) {
+	                  if (VP_PHASE2)
+	                     REN->vp_blacklist_update(PAY.buf[index].pc, PAY.buf[index].vp_correct);
+
+	                  if (!PAY.buf[index].vp_correct) {
+	                     value_mispred_count++;
+	                     set_value_misprediction(PAY.buf[index].AL_index);
+	                  }
+	               }
 
                if (!PAY.buf[index].vp_used)
                   IQ.wakeup(PAY.buf[index].C_phys_reg, true);
@@ -159,8 +166,15 @@ void pipeline_t::execute(unsigned int lane_number) {
             else
                PAY.buf[index].vp_correct = false;
 
-            if (PAY.buf[index].vp_used && !PAY.buf[index].vp_correct)
-               set_value_misprediction(PAY.buf[index].AL_index);
+	            if (PAY.buf[index].vp_used) {
+	               if (VP_PHASE2)
+	                  REN->vp_blacklist_update(PAY.buf[index].pc, PAY.buf[index].vp_correct);
+
+	               if (!PAY.buf[index].vp_correct) {
+	                  value_mispred_count++;
+	                  set_value_misprediction(PAY.buf[index].AL_index);
+	               }
+	            }
 
             if (!PAY.buf[index].vp_used || !PAY.buf[index].vp_correct)
                REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].C_value.dw);
@@ -287,8 +301,15 @@ void pipeline_t::load_replay() {
          else
             PAY.buf[index].vp_correct = false;
 
-         if (PAY.buf[index].vp_used && !PAY.buf[index].vp_correct)
-            set_value_misprediction(PAY.buf[index].AL_index);
+	         if (PAY.buf[index].vp_used) {
+	            if (VP_PHASE2)
+	               REN->vp_blacklist_update(PAY.buf[index].pc, PAY.buf[index].vp_correct);
+
+	            if (!PAY.buf[index].vp_correct) {
+	               value_mispred_count++;
+	               set_value_misprediction(PAY.buf[index].AL_index);
+	            }
+	         }
 
          if (!PAY.buf[index].vp_used)
             IQ.wakeup(PAY.buf[index].C_phys_reg, true);
