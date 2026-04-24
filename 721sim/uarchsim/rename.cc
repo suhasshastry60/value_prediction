@@ -129,10 +129,15 @@ void pipeline_t::rename2() {
    // This is achieved by doing nothing and proceeding to the next statements.
 
    // FIX_ME #2 BEGIN
-   if (REN->stall_branch(bundle_branch) ||
-       REN->stall_reg(bundle_dst) ||
-       REN->stall_vp(bundle_vp))
-         return;
+   bool stall_branch = REN->stall_branch(bundle_branch);
+   bool stall_reg    = REN->stall_reg(bundle_dst);
+   bool stall_vp     = REN->stall_vp(bundle_vp);
+
+   if (stall_vp)
+      vpq_stall_count++;
+
+   if (stall_branch || stall_reg || stall_vp)
+      return;
    // FIX_ME #2 END
 
    //
@@ -228,19 +233,26 @@ void pipeline_t::rename2() {
 
             // Project 4: checker truth is used only for perfect VP and oracle confidence.
             // Real-confidence mode must not depend on good_instruction.
-            if (VP_ORACLE_CONF) {
-               if (PAY.buf[index].vp_pred_avail && PAY.buf[index].good_instruction) {
-                  db_t *actual = get_pipe()->peek(PAY.buf[index].db_index);
-                  PAY.buf[index].vp_confident = (PAY.buf[index].vp_prediction == actual->a_rdst[0].value);
-               }
+	            if (VP_ORACLE_CONF) {
+	               if (PAY.buf[index].vp_pred_avail && PAY.buf[index].good_instruction) {
+	                  db_t *actual = get_pipe()->peek(PAY.buf[index].db_index);
+	                  PAY.buf[index].vp_confident = (PAY.buf[index].vp_prediction == actual->a_rdst[0].value);
+	               }
                else {
-                  PAY.buf[index].vp_confident = false;
-               }
-            }
+	                  PAY.buf[index].vp_confident = false;
+	               }
+	            }
 
-            PAY.buf[index].vpq_idx = REN->vpq_alloc(PAY.buf[index].pc);
-            PAY.buf[index].vpq_valid = true;
-         }
+	            if (!VP_ORACLE_CONF && PAY.buf[index].vp_confident) {
+	               if (REN->vp_blacklist_check(PAY.buf[index].pc)) {
+	                  PAY.buf[index].vp_confident = false;
+	                  blacklist_suppress_count++;
+	               }
+	            }
+
+	            PAY.buf[index].vpq_idx = REN->vpq_alloc(PAY.buf[index].pc);
+	            PAY.buf[index].vpq_valid = true;
+	         }
       }
    }
 

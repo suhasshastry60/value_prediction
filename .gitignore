@@ -8,3 +8,4 @@ run/validation_runs/*.log
 run/validation_runs/microbenchmark_runs/VAL-*
 proj4_spec_gpt.pdf
 run/validation_runs/results/
+run/validation_runs/microbenchmark_runs/*.out

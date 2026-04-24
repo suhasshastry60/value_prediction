@@ -115,6 +115,11 @@ pipeline_t::pipeline_t(
    vpmeas_unconf_corr   = 0;
    vpmeas_unconf_incorr = 0;
 
+   vpq_stall_count          = 0;
+   value_mispred_count      = 0;
+   stride_overflow_count    = 0;
+   blacklist_suppress_count = 0;
+
    /////////////////////////////////////////////////////////////
    // Pipeline widths.
    /////////////////////////////////////////////////////////////
@@ -551,6 +556,12 @@ pipeline_t::~pipeline_t() {
               vpmeas_unconf_corr, pct_u64(vpmeas_unconf_corr, vpmeas_total));
       fprintf(stats_log, "   vpmeas_unconf_incorr   : %10" PRIu64 " (%6.2f%%) // VPU generated an unconfident and incorrect value prediction.\n",
               vpmeas_unconf_incorr, pct_u64(vpmeas_unconf_incorr, vpmeas_total));
+      fprintf(stats_log, "VPU PHASE2 DIAGNOSTICS-----------------------------\n");
+      fprintf(stats_log, "vpq_stall_count          : %10" PRIu64 "\n", vpq_stall_count);
+      fprintf(stats_log, "value_mispred_count      : %10" PRIu64 "\n", value_mispred_count);
+      fprintf(stats_log, "stride_overflow_count    : %10" PRIu64 "\n", stride_overflow_count);
+      fprintf(stats_log, "blacklist_suppress_count : %10" PRIu64 "\n", blacklist_suppress_count);
+      fprintf(stats_log, "\n");
    }
 
 #ifdef RISCV_MICRO_DEBUG

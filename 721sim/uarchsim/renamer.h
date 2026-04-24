@@ -204,11 +204,23 @@ private:
 	uint8_t  VPQ_head_phase;
 	uint8_t  VPQ_tail_phase;
 
+	struct VP_Blacklist_Entry {
+		bool valid;
+		uint16_t tag;
+		uint8_t bad;
+		uint16_t cooldown;
+	};
+
+	std::vector<VP_Blacklist_Entry> VP_Blacklist;
+	uint64_t VP_Blacklist_size;
+
 	uint64_t svp_index(uint64_t pc) const;
 	uint64_t svp_tag(uint64_t pc) const;
 	bool svp_hit(uint64_t pc, uint64_t &idx) const;
 	uint64_t vpq_count_pc(uint64_t pc) const;
 	void vpq_restore_tail(uint64_t tail, uint8_t tail_phase);
+	uint64_t vp_blacklist_hash(uint64_t pc) const;
+	bool vp_blacklisted(uint64_t pc);
 	/////////////////////////////////////////////////////////////////////
 	// Private functions.
 	// e.g., a generic function to copy state from one map to another.
@@ -397,6 +409,8 @@ public:
 	uint64_t vpq_alloc(uint64_t pc);
 	void vpq_deposit(uint64_t vpq_idx, uint64_t value);
 	void vp_retire(uint64_t vpq_idx);
+	bool vp_blacklist_check(uint64_t pc);
+	void vp_blacklist_update(uint64_t pc, bool correct);
 
 	//////////////////////////////////////////
 	// Functions related to Dispatch Stage. //

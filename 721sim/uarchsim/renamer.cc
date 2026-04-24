@@ -119,6 +119,15 @@ renamer::renamer(uint64_t logic_reg_count,
 	VPQ_tail = 0;
 	VPQ_head_phase = 0;
 	VPQ_tail_phase = 0;
+
+	VP_Blacklist_size = 512;
+	VP_Blacklist.resize(VP_Blacklist_size);
+	for (uint64_t i = 0; i < VP_Blacklist_size; i++) {
+		VP_Blacklist[i].valid = false;
+		VP_Blacklist[i].tag = 0;
+		VP_Blacklist[i].bad = 0;
+		VP_Blacklist[i].cooldown = 0;
+	}
 }
 
 renamer::~renamer() {
@@ -205,6 +214,62 @@ bool renamer::stall_vp(uint64_t bundle_vp) {
 	uint64_t occ = ring_occupancy(VPQ_head, VPQ_tail, VPQ_head_phase, VPQ_tail_phase, VPQ_size);
 	uint64_t free = VPQ_size - occ;
 	return (free < bundle_vp);
+}
+
+uint64_t renamer::vp_blacklist_hash(uint64_t pc) const {
+	uint64_t x = pc >> 2;
+	x ^= (pc >> 13);
+	x ^= (pc >> 27);
+	return x & (VP_Blacklist_size - 1);
+}
+
+bool renamer::vp_blacklisted(uint64_t pc) {
+	uint64_t idx = vp_blacklist_hash(pc);
+	uint16_t tag = (uint16_t)((pc >> 2) & 0xFFFF);
+
+	if (!VP_Blacklist[idx].valid)
+		return false;
+
+	if (VP_Blacklist[idx].tag != tag)
+		return false;
+
+	if (VP_Blacklist[idx].cooldown > 0) {
+		VP_Blacklist[idx].cooldown--;
+		return true;
+	}
+
+	return false;
+}
+
+bool renamer::vp_blacklist_check(uint64_t pc) {
+	return vp_blacklisted(pc);
+}
+
+void renamer::vp_blacklist_update(uint64_t pc, bool correct) {
+	uint64_t idx = vp_blacklist_hash(pc);
+	uint16_t tag = (uint16_t)((pc >> 2) & 0xFFFF);
+
+	if (!VP_Blacklist[idx].valid || VP_Blacklist[idx].tag != tag) {
+		VP_Blacklist[idx].valid = true;
+		VP_Blacklist[idx].tag = tag;
+		VP_Blacklist[idx].bad = 0;
+		VP_Blacklist[idx].cooldown = 0;
+	}
+
+	if (correct) {
+		if (VP_Blacklist[idx].bad > 0)
+			VP_Blacklist[idx].bad--;
+		return;
+	}
+
+	if (VP_Blacklist[idx].bad <= 13)
+		VP_Blacklist[idx].bad += 2;
+	else
+		VP_Blacklist[idx].bad = 15;
+
+	if (VP_Blacklist[idx].bad >= 4) {
+		VP_Blacklist[idx].cooldown = 64;
+	}
 }
 
 uint64_t renamer::svp_index(uint64_t pc) const {
