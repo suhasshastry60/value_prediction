@@ -226,15 +226,10 @@ void pipeline_t::rename2() {
             PAY.buf[index].vp_prediction = actual->a_rdst[0].value;
          }
          else if (VP_SVP) {
-            bool trust_relaxed = false;
             REN->vp_predict(PAY.buf[index].pc,
                             PAY.buf[index].vp_pred_avail,
                             PAY.buf[index].vp_confident,
-                            PAY.buf[index].vp_prediction,
-                            trust_relaxed);
-
-            if (trust_relaxed)
-               trust_relax_count++;
+                            PAY.buf[index].vp_prediction);
 
             // Project 4: checker truth is used only for perfect VP and oracle confidence.
             // Real-confidence mode must not depend on good_instruction.

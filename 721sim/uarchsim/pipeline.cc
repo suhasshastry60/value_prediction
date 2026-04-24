@@ -119,7 +119,6 @@ pipeline_t::pipeline_t(
    value_mispred_count      = 0;
    stride_overflow_count    = 0;
    blacklist_suppress_count = 0;
-   trust_relax_count        = 0;
 
    /////////////////////////////////////////////////////////////
    // Pipeline widths.
@@ -465,7 +464,11 @@ pipeline_t::pipeline_t(
          uint64_t conf_bits = ceil_log2_u64(SVP_CONFMAX + 1);
          uint64_t inst_bits = ceil_log2_u64(VPQ_SIZE);
          uint64_t bits_per_entry = SVP_TAG_BITS + conf_bits + 64 + 64 + inst_bits;
-         uint64_t total_bits = svp_entries * bits_per_entry;
+         uint64_t svp_total_bits = svp_entries * bits_per_entry;
+         uint64_t blacklist_entries = 512;
+         uint64_t blacklist_bits_per_entry = 1 + 16 + 4 + 16;
+         uint64_t blacklist_total_bits = blacklist_entries * blacklist_bits_per_entry;
+         uint64_t total_bits = svp_total_bits + blacklist_total_bits;
          double total_bytes = (double) total_bits / 8.0;
          double total_kb = total_bytes / 1024.0;
 
@@ -487,8 +490,11 @@ pipeline_t::pipeline_t(
          fprintf(stats_log, "      instance ctr  : %3" PRIu64 " bits  // formula: (uint64_t)ceil(log2((double)VPQsize))\n", inst_bits);
          fprintf(stats_log, "      -------------------------\n");
          fprintf(stats_log, "      bits/SVP entry: %" PRIu64 " bits\n", bits_per_entry);
-         fprintf(stats_log, "   Total storage cost (bits) = (%" PRIu64 " SVP entries x %" PRIu64 " bits/SVP entry) = %" PRIu64 " bits\n",
-                 svp_entries, bits_per_entry, total_bits);
+         fprintf(stats_log, "   SVP storage (bits) = (%" PRIu64 " SVP entries x %" PRIu64 " bits/SVP entry) = %" PRIu64 " bits\n",
+                 svp_entries, bits_per_entry, svp_total_bits);
+         fprintf(stats_log, "   Blacklist storage (bits) = (%" PRIu64 " entries x %" PRIu64 " bits/entry) = %" PRIu64 " bits\n",
+                 blacklist_entries, blacklist_bits_per_entry, blacklist_total_bits);
+         fprintf(stats_log, "   Total storage cost (bits) = %" PRIu64 " bits\n", total_bits);
          fprintf(stats_log, "   Total storage cost (bytes) = %.2f B (%.2f KB)\n", total_bytes, total_kb);
       }
    }
@@ -562,7 +568,6 @@ pipeline_t::~pipeline_t() {
       fprintf(stats_log, "value_mispred_count      : %10" PRIu64 "\n", value_mispred_count);
       fprintf(stats_log, "stride_overflow_count    : %10" PRIu64 "\n", stride_overflow_count);
       fprintf(stats_log, "blacklist_suppress_count : %10" PRIu64 "\n", blacklist_suppress_count);
-      fprintf(stats_log, "trust_relax_count        : %10" PRIu64 "\n", trust_relax_count);
       fprintf(stats_log, "\n");
    }
 
