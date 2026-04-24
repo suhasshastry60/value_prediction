@@ -465,14 +465,7 @@ pipeline_t::pipeline_t(
          uint64_t conf_bits = ceil_log2_u64(SVP_CONFMAX + 1);
          uint64_t inst_bits = ceil_log2_u64(VPQ_SIZE);
          uint64_t bits_per_entry = SVP_TAG_BITS + conf_bits + 64 + 64 + inst_bits;
-         uint64_t svp_total_bits = svp_entries * bits_per_entry;
-         uint64_t blacklist_entries = 512;
-         uint64_t blacklist_bits_per_entry = 1 + 16 + 4 + 16;
-         uint64_t blacklist_total_bits = blacklist_entries * blacklist_bits_per_entry;
-         uint64_t pathsvp_entries = 512;
-         uint64_t pathsvp_bits_per_entry = 1 + 10 + conf_bits + 64 + 64 + inst_bits;
-         uint64_t pathsvp_total_bits = pathsvp_entries * pathsvp_bits_per_entry;
-         uint64_t total_bits = svp_total_bits + blacklist_total_bits + pathsvp_total_bits;
+         uint64_t total_bits = svp_entries * bits_per_entry;
          double total_bytes = (double) total_bits / 8.0;
          double total_kb = total_bytes / 1024.0;
 
@@ -494,13 +487,8 @@ pipeline_t::pipeline_t(
          fprintf(stats_log, "      instance ctr  : %3" PRIu64 " bits  // formula: (uint64_t)ceil(log2((double)VPQsize))\n", inst_bits);
          fprintf(stats_log, "      -------------------------\n");
          fprintf(stats_log, "      bits/SVP entry: %" PRIu64 " bits\n", bits_per_entry);
-         fprintf(stats_log, "   SVP storage (bits) = (%" PRIu64 " SVP entries x %" PRIu64 " bits/SVP entry) = %" PRIu64 " bits\n",
-                 svp_entries, bits_per_entry, svp_total_bits);
-         fprintf(stats_log, "   Blacklist storage (bits) = (%" PRIu64 " entries x %" PRIu64 " bits/entry) = %" PRIu64 " bits\n",
-                 blacklist_entries, blacklist_bits_per_entry, blacklist_total_bits);
-         fprintf(stats_log, "   Path-SVP storage (bits) = (%" PRIu64 " entries x %" PRIu64 " bits/entry) = %" PRIu64 " bits\n",
-                 pathsvp_entries, pathsvp_bits_per_entry, pathsvp_total_bits);
-         fprintf(stats_log, "   Total storage cost (bits) = %" PRIu64 " bits\n", total_bits);
+         fprintf(stats_log, "   Total storage cost (bits) = (%" PRIu64 " SVP entries x %" PRIu64 " bits/SVP entry) = %" PRIu64 " bits\n",
+                 svp_entries, bits_per_entry, total_bits);
          fprintf(stats_log, "   Total storage cost (bytes) = %.2f B (%.2f KB)\n", total_bytes, total_kb);
       }
    }
@@ -569,13 +557,6 @@ pipeline_t::~pipeline_t() {
               vpmeas_unconf_corr, pct_u64(vpmeas_unconf_corr, vpmeas_total));
       fprintf(stats_log, "   vpmeas_unconf_incorr   : %10" PRIu64 " (%6.2f%%) // VPU generated an unconfident and incorrect value prediction.\n",
               vpmeas_unconf_incorr, pct_u64(vpmeas_unconf_incorr, vpmeas_total));
-      fprintf(stats_log, "VPU PHASE2 DIAGNOSTICS-----------------------------\n");
-      fprintf(stats_log, "vpq_stall_count          : %10" PRIu64 "\n", vpq_stall_count);
-      fprintf(stats_log, "value_mispred_count      : %10" PRIu64 "\n", value_mispred_count);
-      fprintf(stats_log, "stride_overflow_count    : %10" PRIu64 "\n", stride_overflow_count);
-      fprintf(stats_log, "blacklist_suppress_count : %10" PRIu64 "\n", blacklist_suppress_count);
-      fprintf(stats_log, "pathsvp_used_count       : %10" PRIu64 "\n", pathsvp_used_count);
-      fprintf(stats_log, "\n");
    }
 
 #ifdef RISCV_MICRO_DEBUG

@@ -250,7 +250,7 @@ void pipeline_t::rename2() {
 	            }
 
 #if ENABLE_PATHSVP
-	            if (!VP_ORACLE_CONF && !PAY.buf[index].vp_confident) {
+	            if (VP_PHASE2 && !VP_ORACLE_CONF && !PAY.buf[index].vp_confident) {
 	               bool path_avail = false;
 	               bool path_conf = false;
 	               uint64_t path_pred = 0;
@@ -283,7 +283,7 @@ void pipeline_t::rename2() {
 	            }
 #endif
 
-	            if (!VP_ORACLE_CONF && PAY.buf[index].vp_confident) {
+	            if (VP_PHASE2 && !VP_ORACLE_CONF && PAY.buf[index].vp_confident) {
 	               if (REN->vp_blacklist_check(PAY.buf[index].pc)) {
 	                  PAY.buf[index].vp_confident = false;
 	                  PAY.buf[index].pathsvp_used = false;
@@ -295,7 +295,7 @@ void pipeline_t::rename2() {
 	            PAY.buf[index].vpq_valid = true;
 
 #if ENABLE_PATHSVP
-	            if (PAY.buf[index].pathsvp_alloc) {
+	            if (VP_PHASE2 && PAY.buf[index].pathsvp_alloc) {
 	               REN->vpq_set_path(PAY.buf[index].vpq_idx,
 	                                 PAY.buf[index].pathsvp_idx,
 	                                 PAY.buf[index].pathsvp_tag,
@@ -306,7 +306,7 @@ void pipeline_t::rename2() {
       }
 
 #if ENABLE_PATHSVP
-      if (VP_SVP)
+      if (VP_PHASE2 && VP_SVP)
          REN->path_history_update(PAY.buf[index].pc);
 #endif
    }

@@ -37,6 +37,7 @@ static void help() {
    fprintf(stderr, "  --vp-perf=1\n");
    fprintf(stderr, "  --vp-svp=<VPQsize>,<oracleconf>,<#index bits>,<#tag bits>,<confmax>\n");
    fprintf(stderr, "  --vp-eligible=<predINTALU>,<predFPALU>,<predLOAD>\n");
+   fprintf(stderr, "  --vp-phase2=1\n");
    fprintf(stderr, "  --cp=<n>           <n> branch checkpoints for mispredict recovery\n");
 
    fprintf(stderr, "  --bq=<n>           Branch queue (all branches b/w fetch and retire) has <n> entries\n");
@@ -312,6 +313,17 @@ static void set_vp_eligible(const char *config) {
    VPRED_LOAD   = (predLOAD ? true : false);
 }
 
+static void set_vp_phase2(const char *config) {
+   uint64_t phase2;
+
+   if (sscanf(config, "%lu", &phase2) != 1 || phase2 > 1) {
+      fprintf(stderr, "Incorrect usage of --vp-phase2=<0|1>\n");
+      exit(-1);
+   }
+
+   VP_PHASE2 = (phase2 ? true : false);
+}
+
 static void config_IC(const char *config) {
    unsigned int temp_size, temp_blocksize;
    if (sscanf(config, "%u:%u:%u:%u", &temp_size, &L1_IC_ASSOC, &temp_blocksize, &L1_IC_NUM_MHSRs) != 4) {
@@ -492,6 +504,7 @@ int main(int argc, char **argv) {
    parser.option(0, "vp-perf", 1, [&](const char *s) { set_vp_perf(s); });
    parser.option(0, "vp-svp", 1, [&](const char *s) { set_vp_svp(s); });
    parser.option(0, "vp-eligible", 1, [&](const char *s) { set_vp_eligible(s); });
+   parser.option(0, "vp-phase2", 1, [&](const char *s) { set_vp_phase2(s); });
    parser.option(0, "cp", 1, [&](const char *s) { NUM_CHECKPOINTS = atoi(s); });
 
    parser.option(0, "bq", 1, [&](const char *s) {BQ_SIZE = atoi(s); AUTO_BQ_SIZE = false; });

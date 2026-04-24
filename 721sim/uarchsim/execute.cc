@@ -84,7 +84,8 @@ void pipeline_t::execute(unsigned int lane_number) {
                   PAY.buf[index].vp_correct = false;
 
 	               if (PAY.buf[index].vp_used) {
-	                  REN->vp_blacklist_update(PAY.buf[index].pc, PAY.buf[index].vp_correct);
+	                  if (VP_PHASE2)
+	                     REN->vp_blacklist_update(PAY.buf[index].pc, PAY.buf[index].vp_correct);
 
 	                  if (!PAY.buf[index].vp_correct) {
 	                     value_mispred_count++;
@@ -166,7 +167,8 @@ void pipeline_t::execute(unsigned int lane_number) {
                PAY.buf[index].vp_correct = false;
 
 	            if (PAY.buf[index].vp_used) {
-	               REN->vp_blacklist_update(PAY.buf[index].pc, PAY.buf[index].vp_correct);
+	               if (VP_PHASE2)
+	                  REN->vp_blacklist_update(PAY.buf[index].pc, PAY.buf[index].vp_correct);
 
 	               if (!PAY.buf[index].vp_correct) {
 	                  value_mispred_count++;
@@ -300,7 +302,8 @@ void pipeline_t::load_replay() {
             PAY.buf[index].vp_correct = false;
 
 	         if (PAY.buf[index].vp_used) {
-	            REN->vp_blacklist_update(PAY.buf[index].pc, PAY.buf[index].vp_correct);
+	            if (VP_PHASE2)
+	               REN->vp_blacklist_update(PAY.buf[index].pc, PAY.buf[index].vp_correct);
 
 	            if (!PAY.buf[index].vp_correct) {
 	               value_mispred_count++;
