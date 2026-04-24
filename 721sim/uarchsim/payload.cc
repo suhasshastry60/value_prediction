@@ -126,6 +126,11 @@ unsigned int payload::push() {
    buf[index].vp_prediction = 0;
    buf[index].vpq_valid = false;
    buf[index].vpq_idx = 0;
+   buf[index].pathsvp_alloc = false;
+   buf[index].pathsvp_inst_inc = false;
+   buf[index].pathsvp_used = false;
+   buf[index].pathsvp_idx = 0;
+   buf[index].pathsvp_tag = 0;
 
    buf[odd_index].vp_eligible = false;
    buf[odd_index].vp_pred_avail = false;
@@ -135,6 +140,11 @@ unsigned int payload::push() {
    buf[odd_index].vp_prediction = 0;
    buf[odd_index].vpq_valid = false;
    buf[odd_index].vpq_idx = 0;
+   buf[odd_index].pathsvp_alloc = false;
+   buf[odd_index].pathsvp_inst_inc = false;
+   buf[odd_index].pathsvp_used = false;
+   buf[odd_index].pathsvp_idx = 0;
+   buf[odd_index].pathsvp_tag = 0;
 
    // Increment tail by two, since each instruction is pre-allocated
    // two entries, even and odd, to accommodate instruction splitting.

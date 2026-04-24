@@ -199,6 +199,13 @@ typedef struct {
    bool     vpq_valid;        // instruction has a VPQ entry
    uint64_t vpq_idx;          // VPQ index
 
+   // Phase 2: Path-SVP fallback metadata.
+   bool     pathsvp_alloc;        // instruction touched Path-SVP / should train it
+   bool     pathsvp_inst_inc;     // Path-SVP instance was incremented at rename
+   bool     pathsvp_used;         // Path-SVP provided the injected prediction
+   uint64_t pathsvp_idx;
+   uint16_t pathsvp_tag;
+
    ////////////////////////
    // Set by Dispatch Stage.
    ////////////////////////

@@ -403,6 +403,7 @@ public:
    uint64_t value_mispred_count;
    uint64_t stride_overflow_count;
    uint64_t blacklist_suppress_count;
+   uint64_t pathsvp_used_count;
 
    // Functions for pipeline stages.
    void fetch();

@@ -202,6 +202,8 @@ void pipeline_t::dispatch() {
             REN->write(PAY.buf[index].C_phys_reg, PAY.buf[index].vp_prediction);
             REN->set_ready(PAY.buf[index].C_phys_reg);
             PAY.buf[index].vp_used = true;
+            if (PAY.buf[index].pathsvp_used)
+               pathsvp_used_count++;
          }
          else {
             REN->clear_ready(PAY.buf[index].C_phys_reg);

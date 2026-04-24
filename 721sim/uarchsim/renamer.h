@@ -175,6 +175,7 @@ private:
 		// Project 4: checkpointed VPQ tail for future rollback repair
 		uint64_t vpq_tail;
 		uint8_t  vpq_tail_phase;
+		uint64_t path_history;
 	};
 	vector<Branch_Checkpoint> Branch_Checkpoints;
 
@@ -190,11 +191,32 @@ private:
 	vector<SVP_Entry> SVP;
 	uint64_t SVP_num_entries;
 
+	struct PathSVP_Entry {
+		bool valid;
+		uint16_t tag;
+		uint64_t conf;
+		uint64_t retired_value;
+		int64_t stride;
+		uint64_t instance;
+	};
+
+	std::vector<PathSVP_Entry> PathSVP;
+	uint64_t Path_History;
+
+	static const uint64_t PATHSVP_ENTRIES = 512;
+	static const uint64_t PATHSVP_INDEX_MASK = PATHSVP_ENTRIES - 1;
+	static const uint64_t PATHSVP_HIST_MASK = PATHSVP_ENTRIES - 1;
+	static const uint64_t PATHSVP_TAG_MASK = 0x3FF;
+
 	struct VPQ_Entry {
 		bool valid;
 		uint64_t pc;
 		uint64_t value;
 		bool value_valid;
+		bool path_valid;
+		bool path_inst_inc;
+		uint64_t path_idx;
+		uint16_t path_tag;
 	};
 
 	vector<VPQ_Entry> VPQ;
@@ -221,6 +243,10 @@ private:
 	void vpq_restore_tail(uint64_t tail, uint8_t tail_phase);
 	uint64_t vp_blacklist_hash(uint64_t pc) const;
 	bool vp_blacklisted(uint64_t pc);
+	uint64_t pathsvp_index(uint64_t pc) const;
+	uint16_t pathsvp_tag(uint64_t pc) const;
+	void pathsvp_train(uint64_t pc, uint64_t value, uint64_t path_idx, uint16_t path_tag);
+	uint64_t pathsvp_count_inflight(uint64_t path_idx, uint16_t path_tag) const;
 	/////////////////////////////////////////////////////////////////////
 	// Private functions.
 	// e.g., a generic function to copy state from one map to another.
@@ -405,6 +431,21 @@ public:
 	                bool &pred_avail,
 	                bool &confident,
 	                uint64_t &prediction);
+
+	void pathsvp_predict(uint64_t pc,
+	                     bool &pred_avail,
+	                     bool &confident,
+	                     uint64_t &prediction,
+	                     bool &inst_inc,
+	                     uint64_t &path_idx,
+	                     uint16_t &path_tag);
+
+	void vpq_set_path(uint64_t vpq_idx,
+	                  uint64_t path_idx,
+	                  uint16_t path_tag,
+	                  bool inst_inc);
+
+	void path_history_update(uint64_t pc);
 
 	uint64_t vpq_alloc(uint64_t pc);
 	void vpq_deposit(uint64_t vpq_idx, uint64_t value);
