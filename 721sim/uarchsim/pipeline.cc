@@ -465,9 +465,26 @@ pipeline_t::pipeline_t(
          uint64_t conf_bits = ceil_log2_u64(SVP_CONFMAX + 1);
          uint64_t inst_bits = ceil_log2_u64(VPQ_SIZE);
          uint64_t bits_per_entry = SVP_TAG_BITS + conf_bits + 64 + 64 + inst_bits;
-         uint64_t total_bits = svp_entries * bits_per_entry;
+         uint64_t svp_total_bits = svp_entries * bits_per_entry;
+         uint64_t pathsvp_entries = 512;
+         uint64_t pathsvp_tag_bits = 10;
+         uint64_t pathsvp_valid_bits = 1;
+         uint64_t pathsvp_bits_per_entry =
+            pathsvp_valid_bits + pathsvp_tag_bits + conf_bits + 64 + 64 + inst_bits;
+         uint64_t pathsvp_total_bits = pathsvp_entries * pathsvp_bits_per_entry;
+         uint64_t blacklist_entries = 512;
+         uint64_t blacklist_bits_per_entry = 1 + 16 + 4 + 16;
+         uint64_t blacklist_total_bits = blacklist_entries * blacklist_bits_per_entry;
+         uint64_t total_bits = svp_total_bits;
+
+         if (VP_PHASE2) {
+            total_bits += pathsvp_total_bits;
+            total_bits += blacklist_total_bits;
+         }
+
          double total_bytes = (double) total_bits / 8.0;
          double total_kb = total_bytes / 1024.0;
+         uint64_t phase2_extra_bits = pathsvp_total_bits + blacklist_total_bits;
 
          fprintf(stats_log, "VALUE PREDICTOR = stride (Project 4 spec. implementation)\n");
          fprintf(stats_log, "   VPQsize         = %" PRIu64 "\n", VPQ_SIZE);
@@ -488,7 +505,25 @@ pipeline_t::pipeline_t(
          fprintf(stats_log, "      -------------------------\n");
          fprintf(stats_log, "      bits/SVP entry: %" PRIu64 " bits\n", bits_per_entry);
          fprintf(stats_log, "   Total storage cost (bits) = (%" PRIu64 " SVP entries x %" PRIu64 " bits/SVP entry) = %" PRIu64 " bits\n",
-                 svp_entries, bits_per_entry, total_bits);
+                 svp_entries, bits_per_entry, svp_total_bits);
+
+         if (VP_PHASE2) {
+            fprintf(stats_log, "\n");
+            fprintf(stats_log, "PHASE 2 VALUE PREDICTOR STORAGE-------------------\n");
+            fprintf(stats_log, "Path-SVP entries      : %10" PRIu64 "\n", pathsvp_entries);
+            fprintf(stats_log, "Path-SVP bits/entry   : %10" PRIu64 "\n", pathsvp_bits_per_entry);
+            fprintf(stats_log, "Path-SVP total bits   : %10" PRIu64 "\n", pathsvp_total_bits);
+            fprintf(stats_log, "Path-SVP total bytes  : %10.2f\n", ((double)pathsvp_total_bits) / 8.0);
+            fprintf(stats_log, "Blacklist entries     : %10" PRIu64 "\n", blacklist_entries);
+            fprintf(stats_log, "Blacklist bits/entry  : %10" PRIu64 "\n", blacklist_bits_per_entry);
+            fprintf(stats_log, "Blacklist total bits  : %10" PRIu64 "\n", blacklist_total_bits);
+            fprintf(stats_log, "Blacklist total bytes : %10.2f\n", ((double)blacklist_total_bits) / 8.0);
+            fprintf(stats_log, "Phase2 extra bits     : %10" PRIu64 "\n", phase2_extra_bits);
+            fprintf(stats_log, "Phase2 extra bytes    : %10.2f\n", ((double)phase2_extra_bits) / 8.0);
+            fprintf(stats_log, "Total Phase 2 VP storage bits  : %10" PRIu64 "\n", total_bits);
+            fprintf(stats_log, "Total Phase 2 VP storage bytes : %10.2f\n", total_bytes);
+         }
+
          fprintf(stats_log, "   Total storage cost (bytes) = %.2f B (%.2f KB)\n", total_bytes, total_kb);
       }
    }
@@ -557,6 +592,12 @@ pipeline_t::~pipeline_t() {
               vpmeas_unconf_corr, pct_u64(vpmeas_unconf_corr, vpmeas_total));
       fprintf(stats_log, "   vpmeas_unconf_incorr   : %10" PRIu64 " (%6.2f%%) // VPU generated an unconfident and incorrect value prediction.\n",
               vpmeas_unconf_incorr, pct_u64(vpmeas_unconf_incorr, vpmeas_total));
+
+      if (VP_PHASE2) {
+         fprintf(stats_log, "VPU PHASE2 DIAGNOSTICS-----------------------------\n");
+         fprintf(stats_log, "pathsvp_used_count       : %10" PRIu64 "\n", pathsvp_used_count);
+         fprintf(stats_log, "blacklist_suppress_count : %10" PRIu64 "\n", blacklist_suppress_count);
+      }
    }
 
 #ifdef RISCV_MICRO_DEBUG
