@@ -119,6 +119,7 @@ pipeline_t::pipeline_t(
    value_mispred_count      = 0;
    stride_overflow_count    = 0;
    blacklist_suppress_count = 0;
+   trust_relax_count        = 0;
 
    /////////////////////////////////////////////////////////////
    // Pipeline widths.
@@ -561,6 +562,7 @@ pipeline_t::~pipeline_t() {
       fprintf(stats_log, "value_mispred_count      : %10" PRIu64 "\n", value_mispred_count);
       fprintf(stats_log, "stride_overflow_count    : %10" PRIu64 "\n", stride_overflow_count);
       fprintf(stats_log, "blacklist_suppress_count : %10" PRIu64 "\n", blacklist_suppress_count);
+      fprintf(stats_log, "trust_relax_count        : %10" PRIu64 "\n", trust_relax_count);
       fprintf(stats_log, "\n");
    }
 

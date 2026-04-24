@@ -127,6 +127,7 @@ renamer::renamer(uint64_t logic_reg_count,
 		VP_Blacklist[i].tag = 0;
 		VP_Blacklist[i].bad = 0;
 		VP_Blacklist[i].cooldown = 0;
+		VP_Blacklist[i].trust = VP_TRUST_INIT;
 	}
 }
 
@@ -254,6 +255,7 @@ void renamer::vp_blacklist_update(uint64_t pc, bool correct) {
 		VP_Blacklist[idx].tag = tag;
 		VP_Blacklist[idx].bad = 0;
 		VP_Blacklist[idx].cooldown = 0;
+		VP_Blacklist[idx].trust = VP_TRUST_INIT;
 	}
 
 	if (correct) {
@@ -270,6 +272,48 @@ void renamer::vp_blacklist_update(uint64_t pc, bool correct) {
 	if (VP_Blacklist[idx].bad >= 4) {
 		VP_Blacklist[idx].cooldown = 64;
 	}
+
+	VP_Blacklist[idx].trust = 0;
+}
+
+void renamer::vp_trust_update(uint64_t pc, bool stable) {
+	uint64_t idx = vp_blacklist_hash(pc);
+	uint16_t tag = (uint16_t)((pc >> 2) & 0xFFFF);
+
+	if (!VP_Blacklist[idx].valid || VP_Blacklist[idx].tag != tag) {
+		VP_Blacklist[idx].valid = true;
+		VP_Blacklist[idx].tag = tag;
+		VP_Blacklist[idx].bad = 0;
+		VP_Blacklist[idx].cooldown = 0;
+		VP_Blacklist[idx].trust = VP_TRUST_INIT;
+	}
+
+	if (stable) {
+		if (VP_Blacklist[idx].trust < 15)
+			VP_Blacklist[idx].trust++;
+	}
+	else {
+		VP_Blacklist[idx].trust = 0;
+	}
+}
+
+bool renamer::vp_trust_allows_relax(uint64_t pc) {
+	uint64_t idx = vp_blacklist_hash(pc);
+	uint16_t tag = (uint16_t)((pc >> 2) & 0xFFFF);
+
+	if (!VP_Blacklist[idx].valid)
+		return false;
+
+	if (VP_Blacklist[idx].tag != tag)
+		return false;
+
+	if (VP_Blacklist[idx].cooldown > 0)
+		return false;
+
+	if (VP_Blacklist[idx].bad >= 4)
+		return false;
+
+	return (VP_Blacklist[idx].trust >= VP_TRUST_SAFE);
 }
 
 uint64_t renamer::svp_index(uint64_t pc) const {
@@ -306,10 +350,12 @@ void renamer::vpq_checkpoint(uint64_t branch_ID) {
 void renamer::vp_predict(uint64_t pc,
                          bool &pred_avail,
                          bool &confident,
-                         uint64_t &prediction) {
+                         uint64_t &prediction,
+                         bool &trust_relaxed) {
 	pred_avail = false;
 	confident = false;
 	prediction = 0;
+	trust_relaxed = false;
 
 	if (!VP_SVP) return;
 
@@ -324,7 +370,19 @@ void renamer::vp_predict(uint64_t pc,
 
 	prediction = (uint64_t) pred;
 	pred_avail = true;
-	confident = (SVP[idx].conf == SVP_CONFMAX);
+
+	bool normal_confident = (SVP[idx].conf == SVP_CONFMAX);
+
+	bool relaxed_confident = false;
+	if (SVP_CONFMAX > VP_RELAX_CONF_DELTA) {
+		uint64_t relax_threshold = SVP_CONFMAX - VP_RELAX_CONF_DELTA;
+		relaxed_confident =
+			(SVP[idx].conf >= relax_threshold) &&
+			vp_trust_allows_relax(pc);
+	}
+
+	confident = normal_confident || relaxed_confident;
+	trust_relaxed = (!normal_confident && relaxed_confident);
 }
 
 uint64_t renamer::vpq_alloc(uint64_t pc) {
@@ -401,8 +459,10 @@ void renamer::vp_retire(uint64_t vpq_idx) {
 		SVP[idx].tag = svp_tag(pc);
 
 		int64_t new_stride = (int64_t) value - (int64_t) SVP[idx].retired_value;
+		bool stable_stride = (new_stride == SVP[idx].stride);
+		vp_trust_update(pc, stable_stride);
 
-		if (new_stride == SVP[idx].stride) {
+		if (stable_stride) {
 			if (SVP[idx].conf < SVP_CONFMAX)
 				SVP[idx].conf++;
 		}

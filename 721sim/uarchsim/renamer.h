@@ -207,12 +207,20 @@ private:
 	struct VP_Blacklist_Entry {
 		bool valid;
 		uint16_t tag;
+
+		// Toxic-PC suppression.
 		uint8_t bad;
 		uint16_t cooldown;
+
+		// Per-PC trust for relaxed confidence on historically stable PCs.
+		uint8_t trust;
 	};
 
 	std::vector<VP_Blacklist_Entry> VP_Blacklist;
 	uint64_t VP_Blacklist_size;
+	static const uint8_t VP_TRUST_INIT = 7;
+	static const uint8_t VP_TRUST_SAFE = 12;
+	static const uint64_t VP_RELAX_CONF_DELTA = 7;
 
 	uint64_t svp_index(uint64_t pc) const;
 	uint64_t svp_tag(uint64_t pc) const;
@@ -221,6 +229,8 @@ private:
 	void vpq_restore_tail(uint64_t tail, uint8_t tail_phase);
 	uint64_t vp_blacklist_hash(uint64_t pc) const;
 	bool vp_blacklisted(uint64_t pc);
+	void vp_trust_update(uint64_t pc, bool stable);
+	bool vp_trust_allows_relax(uint64_t pc);
 	/////////////////////////////////////////////////////////////////////
 	// Private functions.
 	// e.g., a generic function to copy state from one map to another.
@@ -404,7 +414,8 @@ public:
 	void vp_predict(uint64_t pc,
 	                bool &pred_avail,
 	                bool &confident,
-	                uint64_t &prediction);
+	                uint64_t &prediction,
+	                bool &trust_relaxed);
 
 	uint64_t vpq_alloc(uint64_t pc);
 	void vpq_deposit(uint64_t vpq_idx, uint64_t value);
